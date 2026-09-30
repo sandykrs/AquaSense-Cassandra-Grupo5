@@ -4,7 +4,11 @@
 **Escuela de Estadística, Universidad de Costa Rica**  
 
 **Autores:**  
-
+Sandy
+Estefanía
+Keylor
+Jimena
+Jeferson
 
 ---
 
@@ -13,31 +17,25 @@
 **Palabras clave:** Apache Cassandra, Wide-Column, NoSQL, Telemetría, Series de Tiempo.
 
 ---
+## I. Introducción y Problema
 
-## I. Introducción
+## II. Fundamentos del Modelo NoSQL (Columnas Anchas)
 
----
+## III. Tecnología Seleccionada
 
-## II. Modelado de Datos y Arquitectura NoSQL
+## IV. Modelo y Arquitectura
 
+## V. Implementación
 
----
+## VI. Pruebas
 
-## III. Implementación e Ingesta de Datos
+## VII. Resultados
 
+## VIII. Limitaciones
 
----
+## IX. Conclusiones
 
-## IV. Pruebas de Rendimiento y Resultados
-
----
-
-## V. Conclusiones y Trabajo Futuro
-
----
-
-## Referencias
-
+## X. Referencias
 
 ---
 > **Nota:** El documento final oficial con la diagramación de dos columnas del formato IEEE y gráficos detallados se encuentra en edición y será adjuntado en esta misma carpeta en formato PDF/Word.
