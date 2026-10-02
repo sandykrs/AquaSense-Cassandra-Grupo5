@@ -4,6 +4,7 @@ import time
 import random
 import uuid
 from datetime import datetime, timedelta
+from itertools import islice
 
 try:
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -37,6 +38,13 @@ TIPOS_ANOMALIA = ["flow_high", "flow_low", "pressure_high", "pressure_low", "tem
 # Ventana de tiempo de las mediciones (30 días)
 FECHA_INICIO_MEDICIONES = datetime(2026, 9, 1)
 DIAS_MEDICIONES = 30
+
+# Columnas del CSV de muestra (en este orden)
+COLUMNAS_MEDICION = [
+    "sensor_id", "zone_id", "day", "event_ts",
+    "flow", "pressure", "temperature", "quality",
+    "is_anomaly", "anomaly_type",
+]
 
 # ============================================================
 # ZONAS (20 zonas de Costa Rica con coordenadas aproximadas)
@@ -178,9 +186,21 @@ def generar_mediciones(sensores):
 def exportar_muestra(mediciones, num_filas=100):
     """
     Exporta una muestra pequeña a CSV para pruebas.
+    Recibe el generador de mediciones y toma una fila cada ~10,000,
+    para que la muestra tenga sensores y zonas variados.
+    Retorna la ruta del archivo creado.
     """
-    # TODO (Día 4)
-    pass
+    # Paso que NO es múltiplo de 1000, así no se repite siempre el mismo sensor
+    paso = (NUM_MEDICIONES // num_filas) + 7
+    muestra = list(islice(islice(mediciones, 0, None, paso), num_filas))
+
+    ruta = os.path.join(SAMPLE_DIR, "sample_mediciones.csv")
+    with open(ruta, "w", newline="", encoding="utf-8") as f:
+        escritor = csv.DictWriter(f, fieldnames=COLUMNAS_MEDICION)
+        escritor.writeheader()
+        escritor.writerows(muestra)
+
+    return ruta
 
 
 # ============================================================
@@ -196,18 +216,12 @@ if __name__ == "__main__":
     print(f"Sensores generados: {len(sensores)}")
 
     inicio = time.time()
-    total = 0
-    anomalias = 0
-    primera = None
-    for m in generar_mediciones(sensores):
-        if primera is None:
-            primera = m
-        total += 1
-        if m["is_anomaly"]:
-            anomalias += 1
+    ruta = exportar_muestra(generar_mediciones(sensores), num_filas=100)
     duracion = time.time() - inicio
 
-    print(f"Mediciones generadas: {total:,}")
-    print(f"Anomalías: {anomalias:,} ({anomalias / total * 100:.2f}%)")
+    with open(ruta, encoding="utf-8") as f:
+        filas = sum(1 for _ in f) - 1  # menos el encabezado
+
+    print(f"Muestra exportada: {ruta}")
+    print(f"Filas en el CSV: {filas}")
     print(f"Tiempo: {duracion:.1f} segundos")
-    print("Ejemplo:", primera)
