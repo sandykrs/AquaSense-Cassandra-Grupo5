@@ -22,7 +22,10 @@ Para ejecutar este proyecto de forma local se requiere:
 * **Python 3.10+**
 * Cliente `cqlsh`
 ## Instalación
-
+1. Clonar el repositorio y entrar a la carpeta:
+   ```bash
+   git clone [https://github.com/sandykrs/AquaSense-Cassandra-Grupo5.git](https://github.com/sandykrs/AquaSense-Cassandra-Grupo5.git)
+   cd AquaSense-Cassandra-Grupo5
 ## Carga de datos
 
 ## Prueba y demostración
