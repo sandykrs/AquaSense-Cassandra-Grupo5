@@ -92,9 +92,3 @@ text
 ---
 
 
-
-## 5. Referencias
-
-- `docs/modelo-datos.md`
-- `docs/arquitectura.md`
-- `cql/schema.cql`
