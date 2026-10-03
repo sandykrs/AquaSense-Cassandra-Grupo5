@@ -19,6 +19,7 @@ v
 | + Dashboards |
 +------------------+
 
+text
 
 - **Sensores:** 1000 sensores distribuidos en 20 zonas.
 - **API de ingesta:** recibe lecturas y las escribe en Cassandra con batch por sensor/bucket.
@@ -30,9 +31,9 @@ v
 ## 2. Flujo de Datos
 
 1. **Ingesta:** cada sensor envía lecturas cada N segundos.
-2. **Escritura:** la API escribe en `sensor_readings`, `readings_by_zone` y `sensor_latest`.
-3. **Detección de anomalías:** se evalúa en la ingesta o en un job periódico; si aplica, escribe en `anomalies_by_sensor` y `anomalies_by_zone`.
-4. **Agregados:** un job diario calcula `daily_zone_stats`.
+2. **Escritura:** la API escribe en `lecturas_por_sensor`, `lecturas_por_zona` y `ultima_lectura_sensor`.
+3. **Detección de anomalías:** se evalúa en la ingesta o en un job periódico; si aplica, escribe en `anomalias_por_sensor` y `anomalias_por_zona`.
+4. **Agregados:** un job diario calcula `resumen_diario_zona`.
 5. **Consulta:** los dashboards consultan por sensor, zona o rango temporal.
 
 ---
@@ -53,7 +54,7 @@ v
 - **Horizontal:** agregar nodos al clúster distribuye datos automáticamente (consistent hashing).
 - **Escritura:** Cassandra está optimizada para escritura append-only.
 - **Lectura:** cada tabla está optimizada para una consulta específica.
-- **Particionado:** `(sensor_id, bucket)` y `(zone, bucket)` evitan hotspots.
+- **Particionado:** `(sensor_id, bucket)` y `(zona, bucket)` evitan hotspots.
 
 ---
 
@@ -82,3 +83,12 @@ El entorno se levanta con Docker:
 docker run --name aquasense -p 9042:9042 -d cassandra:latest
 docker cp cql/schema.cql aquasense:/schema.cql
 docker exec -it aquasense cqlsh
+Dentro de cqlsh:
+
+cql
+SOURCE '/schema.cql';
+text
+
+---
+
+
