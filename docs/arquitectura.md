@@ -91,64 +91,7 @@ text
 
 ---
 
-## 📋 Fase 3: Actualizar el `docs/validacion-schema.md`
 
-Como cambió el schema, hay que **redeployar y validar de nuevo**. El contenido del `validacion-schema.md` ya no refleja los nombres reales. Te dejo el contenido actualizado:
-
-```markdown
-# Validación del Schema - AquaSense CR
-
-**Proyecto:** XS0131 - Gestión de Bases de Datos y Análisis de Información  
-**Caso:** 3 - AquaSense CR (Wide-Column)  
-**Grupo:** 5  
-**Tecnología:** Apache Cassandra 5.0.9  
-**Autores:** Jeferson Salazar, Sandy Ruiz, Jimena Díaz, Estafanía Núñez, Keylor Gómez  
-**Fecha de validación:** 2 de octubre de 2026
-
----
-
-## 1. Objetivo
-
-Validar que las 8 tablas del keyspace `aquasense` (con nomenclatura en español) funcionan correctamente con inserciones y lecturas, sin errores de sintaxis ni de tipos, y sin necesidad de `ALLOW FILTERING`.
-
----
-
-## 2. Entorno de validación
-
-| Componente | Valor |
-|---|---|
-| Contenedor Docker | `aquasense` |
-| Imagen | `cassandra:latest` |
-| Versión de Cassandra | 5.0.9 |
-| Puerto | 9042 |
-| Keyspace | `aquasense` |
-| Cliente | cqlsh |
-
----
-
-## 3. Tablas validadas
-
-| Tabla | Inserción | Consulta | Estado |
-|---|---|---|---|
-| sensores | ✅ | ✅ | OK |
-| sensores_por_zona | ✅ | ✅ | OK |
-| lecturas_por_sensor | ✅ | ✅ | OK |
-| lecturas_por_zona | ✅ | ✅ | OK |
-| anomalias_por_sensor | ✅ | ✅ | OK |
-| anomalias_por_zona | ✅ | ✅ | OK |
-| resumen_diario_zona | ✅ | ✅ | OK |
-| ultima_lectura_sensor | ✅ | ✅ | OK |
-
----
-
-## 4. Conclusiones
-
-- Las 8 tablas del keyspace `aquasense` están correctamente creadas con nomenclatura en español.
-- Todas las consultas se resuelven filtrando por partition key completa, sin `ALLOW FILTERING`.
-- Los tipos de datos coinciden con el diseño documentado en `modelo-datos.md`.
-- El schema queda validado para recibir los datos sintéticos del Integrante B.
-
----
 
 ## 5. Referencias
 
