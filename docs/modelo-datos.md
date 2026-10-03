@@ -4,7 +4,7 @@
 **Caso:** 3 - AquaSense CR (Wide-Column)  
 **Grupo:** 5  
 **Tecnología:** Apache Cassandra 5.0.9  
-**Autores:** Jeferson Salazar, Sandy Ruiz, Jimena Díaz, Estefanía Núñez, Keylor Gómez
+**Autores:** Jeferson Salazar, Sandy Ruiz, Jimena Díaz, Estafanía Núñez, Keylor Gómez
 
 ---
 
@@ -31,8 +31,8 @@ Cassandra es **query-driven**: las tablas se diseñan a partir de las consultas,
 | Decisión | Justificación |
 |---|---|
 | Partición por `(sensor_id, bucket)` | Evita particiones ilimitadas por sensor. El bucket (día) mantiene un tamaño predecible. |
-| Partición por `(zone, bucket)` | Permite consultar por zona y rango temporal sin escanear toda la tabla. |
-| Clustering por `ts DESC` | Las últimas lecturas se devuelven primero, sin ordenamiento adicional. |
+| Partición por `(zona, bucket)` | Permite consultar por zona y rango temporal sin escanear toda la tabla. |
+| Clustering por `fecha_hora DESC` | Las últimas lecturas se devuelven primero, sin ordenamiento adicional. |
 | TimeWindowCompactionStrategy (TWCS) | Óptima para series de tiempo: agrupa SSTables por ventana temporal. |
 | Desnormalización | Aceptada en Cassandra a cambio de lecturas rápidas sin joins. |
 
@@ -44,38 +44,38 @@ El `bucket` es una fecha (`date`) que agrupa las lecturas por día. Sin él, un 
 
 ## 3. Tablas del Modelo
 
-### 3.1 `sensors` - Catálogo de sensores
+### 3.1 `sensores` - Catálogo de sensores
 
 | Columna | Tipo | Rol |
 |---|---|---|
 | sensor_id | uuid | Partition Key |
-| zone | text | atributo |
+| zona | text | atributo |
 | tipo | text | atributo |
 | activo | boolean | atributo |
-| lat | double | atributo |
-| lon | double | atributo |
+| latitud | double | atributo |
+| longitud | double | atributo |
 
 **Uso:** consultar metadatos de un sensor por ID.
 
-### 3.2 `sensors_by_zone` - Sensores por zona
+### 3.2 `sensores_por_zona` - Sensores por zona
 
 | Columna | Tipo | Rol |
 |---|---|---|
-| zone | text | Partition Key |
+| zona | text | Partition Key |
 | sensor_id | uuid | Clustering Key |
 | tipo | text | atributo |
 | activo | boolean | atributo |
 
 **Uso:** listar todos los sensores de una zona.
 
-### 3.3 `sensor_readings` - Lecturas por sensor
+### 3.3 `lecturas_por_sensor` - Lecturas por sensor
 
 | Columna | Tipo | Rol |
 |---|---|---|
 | sensor_id | uuid | Partition Key |
 | bucket | date | Partition Key |
-| ts | timestamp | Clustering Key (DESC) |
-| zone | text | atributo |
+| fecha_hora | timestamp | Clustering Key (DESC) |
+| zona | text | atributo |
 | caudal | double | atributo |
 | presion | double | atributo |
 | temperatura | double | atributo |
@@ -84,13 +84,13 @@ El `bucket` es una fecha (`date`) que agrupa las lecturas por día. Sin él, un 
 
 **Uso:** últimas lecturas de un sensor, rango temporal de un sensor.
 
-### 3.4 `readings_by_zone` - Lecturas por zona
+### 3.4 `lecturas_por_zona` - Lecturas por zona
 
 | Columna | Tipo | Rol |
 |---|---|---|
-| zone | text | Partition Key |
+| zona | text | Partition Key |
 | bucket | date | Partition Key |
-| ts | timestamp | Clustering Key (DESC) |
+| fecha_hora | timestamp | Clustering Key (DESC) |
 | sensor_id | uuid | Clustering Key (ASC) |
 | caudal, presion, temperatura | double | atributos |
 | calidad | text | atributo |
@@ -98,24 +98,24 @@ El `bucket` es una fecha (`date`) que agrupa las lecturas por día. Sin él, un 
 
 **Uso:** lecturas por zona y rango temporal.
 
-### 3.5 `anomalies_by_sensor` y `anomalies_by_zone`
+### 3.5 `anomalias_por_sensor` y `anomalias_por_zona`
 
 Réplicas especializadas para consultar solo anomalías, con un campo extra `motivo` que describe la causa.
 
-### 3.6 `daily_zone_stats` - Resumen diario por zona
+### 3.6 `resumen_diario_zona` - Resumen diario por zona
 
 | Columna | Tipo | Rol |
 |---|---|---|
-| zone | text | Partition Key |
-| day | date | Clustering Key (DESC) |
-| sensor_count | int | atributo |
-| lectura_count | int | atributo |
-| avg_caudal, avg_presion, avg_temperatura | double | atributos |
-| anomaly_count | int | atributo |
+| zona | text | Partition Key |
+| dia | date | Clustering Key (DESC) |
+| total_sensores | int | atributo |
+| total_lecturas | int | atributo |
+| promedio_caudal, promedio_presion, promedio_temperatura | double | atributos |
+| total_anomalias | int | atributo |
 
 **Uso:** reportes operativos agregados por zona y día.
 
-### 3.7 `sensor_latest` - Última lectura por sensor
+### 3.7 `ultima_lectura_sensor` - Última lectura por sensor
 
 Tabla optimizada para obtener la lectura más reciente de un sensor en O(1).
 
@@ -125,27 +125,27 @@ Tabla optimizada para obtener la lectura más reciente de un sensor en O(1).
 
 ```cql
 -- 1. Últimas lecturas de un sensor
-SELECT * FROM sensor_readings
+SELECT * FROM lecturas_por_sensor
 WHERE sensor_id = ? AND bucket = ?
-ORDER BY ts DESC LIMIT 10;
+ORDER BY fecha_hora DESC LIMIT 10;
 
 -- 2. Rango temporal de un sensor
-SELECT * FROM sensor_readings
+SELECT * FROM lecturas_por_sensor
 WHERE sensor_id = ? AND bucket = ?
-  AND ts >= ? AND ts <= ?;
+  AND fecha_hora >= ? AND fecha_hora <= ?;
 
 -- 3. Lecturas por zona y periodo
-SELECT * FROM readings_by_zone
-WHERE zone = ? AND bucket = ?
-  AND ts >= ? AND ts <= ?;
+SELECT * FROM lecturas_por_zona
+WHERE zona = ? AND bucket = ?
+  AND fecha_hora >= ? AND fecha_hora <= ?;
 
 -- 4. Anomalías por zona
-SELECT * FROM anomalies_by_zone
-WHERE zone = ? AND bucket = ?;
+SELECT * FROM anomalias_por_zona
+WHERE zona = ? AND bucket = ?;
 
 -- 5. Resumen diario por zona
-SELECT * FROM daily_zone_stats
-WHERE zone = ? AND day >= ?;
+SELECT * FROM resumen_diario_zona
+WHERE zona = ? AND dia >= ?;
 
 -- 6. Última lectura de un sensor
-SELECT * FROM sensor_latest WHERE sensor_id = ?;
+SELECT * FROM ultima_lectura_sensor WHERE sensor_id = ?;
