@@ -1,4 +1,5 @@
 import os
+import csv
 import time
 import argparse
 from collections import defaultdict
@@ -60,7 +61,7 @@ def enviar_batches(session, stmt, filas, tamano_batch=TAMANO_BATCH):
 
 
 def enviar_individuales(session, stmt, lista_params):
-    """Para las tablas donde cada fila es su propia partición (sin batch)."""
+    """Para tablas donde cada fila es su propia partición (sin batch)."""
     execute_concurrent(session, [(stmt, p) for p in lista_params],
                        concurrency=CONCURRENCIA, raise_on_first_error=True)
 
@@ -87,6 +88,21 @@ def cargar_sensores(session, sensores):
     enviar_individuales(session, stmt_sensor, individuales)
     enviar_batches(session, stmt_por_zona, por_zona)
     print(f"Sensores cargados: {len(sensores)}")
+
+
+def registrar_resultado(filas, anomalias, batches, duracion):
+    """Agrega una línea a data/resultados_carga.csv para el benchmark."""
+    ruta = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "resultados_carga.csv")
+    nuevo = not os.path.exists(ruta)
+    with open(ruta, "a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if nuevo:
+            w.writerow(["fecha", "filas", "anomalias", "batches",
+                        "tamano_batch", "concurrencia", "segundos", "filas_por_seg"])
+        w.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), filas,
+                    anomalias, batches, TAMANO_BATCH, CONCURRENCIA,
+                    round(duracion, 1), round(filas / duracion)])
 
 
 def cargar_mediciones(session, sensores, limite):
@@ -206,6 +222,8 @@ def cargar_mediciones(session, sensores, limite):
     print(f"Batches enviados:    {total_batches:,}")
     print(f"Tiempo:              {duracion:.1f} s")
     print(f"Velocidad:           {total / duracion:,.0f} filas/s")
+
+    registrar_resultado(total, total_anomalias, total_batches, duracion)
 
 
 # ============================================================
