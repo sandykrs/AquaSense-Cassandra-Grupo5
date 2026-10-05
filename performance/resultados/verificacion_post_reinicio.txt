@@ -1,0 +1,6 @@
+﻿Tabla: lecturas_por_sensor
+Filas totales:            1,000,000
+Filas anomalas:           15,176 (1.52 %)
+Particiones distintas:    30,000
+Filas por particion:      min=33  media=33.3  max=34
+Tiempo de verificacion:   12.1 s
