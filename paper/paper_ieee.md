@@ -59,7 +59,6 @@ El keyspace `aquasense` contiene 8 tablas:
 
 ### D. Arquitectura
 
-[Insertar diagrama de arquitectura]
 
 La arquitectura consta de:
 - **Capa de ingesta:** API en Python que recibe lecturas y las escribe en Cassandra.
