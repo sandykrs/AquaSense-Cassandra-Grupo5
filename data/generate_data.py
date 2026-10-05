@@ -1,62 +1,168 @@
 import os
-import sys
 import csv
-import subprocess
+import time
+import argparse
+from collections import defaultdict
+from datetime import datetime, date
+from uuid import UUID
 
-CARPETA = os.path.dirname(os.path.abspath(__file__))
-LOAD = os.path.join(CARPETA, "load_data.py")
-RESULTADOS = os.path.join(CARPETA, "resultados_carga.csv")
-LIMITE = 100_000
+from cassandra.cluster import Cluster
+from cassandra.query import BatchStatement, BatchType
+from cassandra.concurrent import execute_concurrent
 
-# (tamaño de batch, concurrencia, buffer)
-CONFIGS = [
-    (1,   32, 20_000),    # base: casi sin agrupar
-    (10,  32, 20_000),
-    (25,  32, 20_000),
-    (50,  32, 20_000),    # configuración actual
-    (100, 32, 20_000),
-    (50,  32, 50_000),    # buffer más grande
-    (50,  32, 100_000),
-    (50,  16, 20_000),    # menos concurrencia
-    (50,  64, 20_000),    # más concurrencia
-    (50, 128, 20_000),
-]
+from generate_data import generar_sensores, generar_mediciones, NUM_MEDICIONES
 
+# ============================================================
+# CONFIGURACIÓN (se puede cambiar con variables de entorno
+# o, para los 3 últimos, con --batch / --concurrency / --buffer)
+# ============================================================
+HOSTS = os.getenv("CASSANDRA_HOSTS", "127.0.0.1").split(",")
+PORT = int(os.getenv("CASSANDRA_PORT", "9042"))
+KEYSPACE = os.getenv("CASSANDRA_KEYSPACE", "aquasense")
 
-def correr(batch, conc, buf, limite):
-    return subprocess.run(
-        [sys.executable, LOAD, "--limit", str(limite), "--batch", str(batch),
-         "--concurrency", str(conc), "--buffer", str(buf)],
-        capture_output=True, text=True,
-    )
+TAMANO_BATCH = 50        # filas máximas por batch (misma partición)
+TAMANO_BUFFER = 20_000   # filas que se acumulan antes de agrupar y enviar
+CONCURRENCIA = 32        # operaciones en vuelo al mismo tiempo
+
+# El generador usa 0/1/2; el schema usa texto
+CALIDAD = {0: "buena", 1: "regular", 2: "mala"}
 
 
-if __name__ == "__main__":
-    print("Calentamiento (no cuenta en el ranking)...")
-    r = correr(50, 32, 20_000, 20_000)
-    if r.returncode != 0:
-        print(r.stderr)
-        sys.exit("Falló el calentamiento. Revisá que Cassandra esté corriendo.")
+# ============================================================
+# FUNCIONES
+# ============================================================
 
-    for i, (b, c, f) in enumerate(CONFIGS, 1):
-        print(f"Prueba {i}/{len(CONFIGS)}: batch={b} concurrencia={c} buffer={f:,} ...")
-        r = correr(b, c, f, LIMITE)
-        if r.returncode != 0:
-            print(r.stderr)
-            sys.exit(f"Falló la prueba {i}.")
+def conectar():
+    cluster = Cluster(HOSTS, port=PORT)
+    session = cluster.connect(KEYSPACE)
+    return cluster, session
 
-    with open(RESULTADOS, newline="", encoding="utf-8") as f:
-        corridas = list(csv.DictReader(f))[-len(CONFIGS):]
-    corridas.sort(key=lambda x: int(x["filas_por_seg"]), reverse=True)
 
-    print("\n" + "=" * 62)
-    print(f"{'batch':>6} {'concurr.':>9} {'buffer':>9} {'batches':>9} {'seg':>7} {'filas/s':>9}")
-    print("=" * 62)
-    for x in corridas:
-        print(f"{x['tamano_batch']:>6} {x['concurrencia']:>9} "
-              f"{int(x['tamano_buffer']):>9,} {int(x['batches']):>9,} "
-              f"{x['segundos']:>7} {int(x['filas_por_seg']):>9,}")
-    print("=" * 62)
-    mejor = corridas[0]
-    print(f"Mejor: batch={mejor['tamano_batch']} concurrencia={mejor['concurrencia']} "
-          f"buffer={int(mejor['tamano_buffer']):,} ({int(mejor['filas_por_seg']):,} filas/s)")
+def enviar_batches(session, stmt, filas, tamano_batch=None):
+    """
+    filas: lista de (clave_particion, parametros).
+    Agrupa por partición y envía batches UNLOGGED en paralelo.
+    Retorna la cantidad de batches enviados.
+    """
+    tamano_batch = tamano_batch or TAMANO_BATCH
+
+    grupos = defaultdict(list)
+    for clave, params in filas:
+        grupos[clave].append(params)
+
+    batches = []
+    for lista in grupos.values():
+        for i in range(0, len(lista), tamano_batch):
+            batch = BatchStatement(batch_type=BatchType.UNLOGGED)
+            for params in lista[i:i + tamano_batch]:
+                batch.add(stmt, params)
+            batches.append((batch, None))
+
+    execute_concurrent(session, batches, concurrency=CONCURRENCIA,
+                       raise_on_first_error=True)
+    return len(batches)
+
+
+def enviar_individuales(session, stmt, lista_params):
+    """Para tablas donde cada fila es su propia partición (sin batch)."""
+    execute_concurrent(session, [(stmt, p) for p in lista_params],
+                       concurrency=CONCURRENCIA, raise_on_first_error=True)
+
+
+def cargar_sensores(session, sensores):
+    stmt_sensor = session.prepare("""
+        INSERT INTO sensores (sensor_id, zona, tipo, activo, latitud, longitud)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """)
+    stmt_por_zona = session.prepare("""
+        INSERT INTO sensores_por_zona (zona, sensor_id, tipo, activo)
+        VALUES (?, ?, ?, ?)
+    """)
+
+    individuales = []
+    por_zona = []
+    for s in sensores:
+        sid = UUID(s["sensor_id"])
+        activo = s["status"] == "activo"
+        individuales.append((sid, s["zone_id"], s["sensor_type"], activo,
+                             s["latitude"], s["longitude"]))
+        por_zona.append((s["zone_id"], (s["zone_id"], sid, s["sensor_type"], activo)))
+
+    enviar_individuales(session, stmt_sensor, individuales)
+    enviar_batches(session, stmt_por_zona, por_zona)
+    print(f"Sensores cargados: {len(sensores)}")
+
+
+def registrar_resultado(filas, anomalias, batches, duracion):
+    """Agrega una línea a data/resultados_carga.csv para el benchmark."""
+    carpeta = os.path.dirname(os.path.abspath(__file__))
+    ruta = os.path.join(carpeta, "resultados_carga.csv")
+    encabezado = ["fecha", "filas", "anomalias", "batches", "tamano_batch",
+                  "tamano_buffer", "concurrencia", "segundos", "filas_por_seg"]
+
+    # Si el CSV es de la versión anterior (sin tamano_buffer), se guarda aparte
+    if os.path.exists(ruta):
+        with open(ruta, encoding="utf-8") as f:
+            primera = f.readline()
+        if "tamano_buffer" not in primera:
+            os.replace(ruta, os.path.join(carpeta, "resultados_carga_dia6.csv"))
+
+    nuevo = not os.path.exists(ruta)
+    with open(ruta, "a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if nuevo:
+            w.writerow(encabezado)
+        w.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), filas,
+                    anomalias, batches, TAMANO_BATCH, TAMANO_BUFFER,
+                    CONCURRENCIA, round(duracion, 1), round(filas / duracion)])
+
+
+def cargar_mediciones(session, sensores, limite):
+    stmt_lec_sensor = session.prepare("""
+        INSERT INTO lecturas_por_sensor
+        (sensor_id, bucket, fecha_hora, zona, caudal, presion,
+         temperatura, calidad, anomalia)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """)
+    stmt_lec_zona = session.prepare("""
+        INSERT INTO lecturas_por_zona
+        (zona, bucket, fecha_hora, sensor_id, caudal, presion,
+         temperatura, calidad, anomalia)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """)
+    stmt_anom_sensor = session.prepare("""
+        INSERT INTO anomalias_por_sensor
+        (sensor_id, bucket, fecha_hora, zona, caudal, presion,
+         temperatura, calidad, motivo)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """)
+    stmt_anom_zona = session.prepare("""
+        INSERT INTO anomalias_por_zona
+        (zona, bucket, fecha_hora, sensor_id, motivo, caudal, presion,
+         temperatura, calidad)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """)
+    stmt_resumen = session.prepare("""
+        INSERT INTO resumen_diario_zona
+        (zona, dia, total_sensores, total_lecturas, promedio_caudal,
+         promedio_presion, promedio_temperatura, total_anomalias)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """)
+    stmt_ultima = session.prepare("""
+        INSERT INTO ultima_lectura_sensor
+        (sensor_id, zona, fecha_hora, caudal, presion, temperatura,
+         calidad, anomalia)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """)
+
+    lec_sensor, lec_zona, anom_sensor, anom_zona = [], [], [], []
+    resumen = {}   # (zona, dia) -> [n, sum_caudal, sum_presion, sum_temp, anomalias, sensores]
+    ultima = {}    # sensor_id -> params de la última lectura
+    total = 0
+    total_anomalias = 0
+    total_batches = 0
+    inicio = time.time()
+
+    def vaciar():
+        nonlocal lec_sensor, lec_zona, anom_sensor, anom_zona, total_batches
+        total_batches +=
