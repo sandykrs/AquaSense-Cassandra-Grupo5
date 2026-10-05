@@ -1,1 +1,29 @@
+version: '3.8'
 
+services:
+  cassandra:
+    image: cassandra:5.0.9
+    container_name: aquasense
+    hostname: aquasense
+    restart: unless-stopped
+    ports:
+      - "9042:9042"
+    environment:
+      - CASSANDRA_CLUSTER_NAME=AquaSenseCluster
+      - CASSANDRA_DC=datacenter1
+      - CASSANDRA_RACK=rack1
+      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+      - MAX_HEAP_SIZE=1G
+      - HEAP_NEWSIZE=256M
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+      - ./database/schema/schema.cql:/schema.cql
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'DESCRIBE CLUSTER'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+volumes:
+  cassandra_data:
