@@ -32,5 +32,5 @@ Notas:
 
 \- La velocidad cuenta mediciones por segundo, no escrituras totales a todas las tablas.
 
-\- Cada corrida se hizo con las tablas vacías.
+
 
