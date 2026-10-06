@@ -27,6 +27,21 @@ CONCURRENCIA = 32        # operaciones en vuelo al mismo tiempo
 # El generador usa 0/1/2; el schema usa texto
 CALIDAD = {0: "buena", 1: "regular", 2: "mala"}
 
+# Configuraciones que prueba --benchmark: (batch, concurrencia, buffer)
+CONFIGS_BENCHMARK = [
+    (1,   32, 20_000),    # base: casi sin agrupar
+    (10,  32, 20_000),
+    (25,  32, 20_000),
+    (50,  32, 20_000),    # configuración por defecto
+    (100, 32, 20_000),
+    (50,  32, 50_000),    # buffer más grande
+    (50,  32, 100_000),
+    (50,  16, 20_000),    # menos concurrencia
+    (50,  64, 20_000),    # más concurrencia
+    (50, 128, 20_000),
+]
+LIMITE_BENCHMARK = 100_000
+
 
 # ============================================================
 # FUNCIONES
@@ -117,7 +132,12 @@ def registrar_resultado(filas, anomalias, batches, duracion):
                     CONCURRENCIA, round(duracion, 1), round(filas / duracion)])
 
 
-def cargar_mediciones(session, sensores, limite):
+def cargar_mediciones(session, sensores, limite, verbose=True, registrar=True):
+    """
+    Carga las mediciones en Cassandra. Retorna un diccionario con el resultado.
+    verbose=False silencia los prints (lo usa --benchmark).
+    registrar=False no escribe en resultados_carga.csv.
+    """
     stmt_lec_sensor = session.prepare("""
         INSERT INTO lecturas_por_sensor
         (sensor_id, bucket, fecha_hora, zona, caudal, presion,
@@ -165,4 +185,157 @@ def cargar_mediciones(session, sensores, limite):
 
     def vaciar():
         nonlocal lec_sensor, lec_zona, anom_sensor, anom_zona, total_batches
-        total_batches +=
+        total_batches += enviar_batches(session, stmt_lec_sensor, lec_sensor)
+        total_batches += enviar_batches(session, stmt_lec_zona, lec_zona)
+        total_batches += enviar_batches(session, stmt_anom_sensor, anom_sensor)
+        total_batches += enviar_batches(session, stmt_anom_zona, anom_zona)
+        lec_sensor, lec_zona, anom_sensor, anom_zona = [], [], [], []
+
+    for m in generar_mediciones(sensores):
+        if total >= limite:
+            break
+
+        sid = UUID(m["sensor_id"])
+        zona = m["zone_id"]
+        bucket = date.fromisoformat(m["day"])
+        ts = datetime.strptime(m["event_ts"], "%Y-%m-%d %H:%M:%S")
+        calidad = CALIDAD[m["quality"]]
+        caudal, presion, temp = m["flow"], m["pressure"], m["temperature"]
+        anomalia = m["is_anomaly"]
+
+        lec_sensor.append(((m["sensor_id"], m["day"]), (
+            sid, bucket, ts, zona, caudal, presion, temp, calidad, anomalia)))
+        lec_zona.append(((zona, m["day"]), (
+            zona, bucket, ts, sid, caudal, presion, temp, calidad, anomalia)))
+
+        if anomalia:
+            total_anomalias += 1
+            anom_sensor.append(((m["sensor_id"], m["day"]), (
+                sid, bucket, ts, zona, caudal, presion, temp, calidad,
+                m["anomaly_type"])))
+            anom_zona.append(((zona, m["day"]), (
+                zona, bucket, ts, sid, m["anomaly_type"],
+                caudal, presion, temp, calidad)))
+
+        # Acumuladores para resumen_diario_zona
+        r = resumen.setdefault((zona, bucket), [0, 0.0, 0.0, 0.0, 0, set()])
+        r[0] += 1
+        r[1] += caudal
+        r[2] += presion
+        r[3] += temp
+        r[4] += 1 if anomalia else 0
+        r[5].add(sid)
+
+        # Última lectura por sensor (el generador va en orden de tiempo)
+        ultima[sid] = (sid, zona, ts, caudal, presion, temp, calidad, anomalia)
+
+        total += 1
+        if len(lec_sensor) >= TAMANO_BUFFER:
+            vaciar()
+            if verbose:
+                seg = time.time() - inicio
+                print(f"  {total:,} filas | {total / seg:,.0f} filas/s")
+
+    if lec_sensor:
+        vaciar()
+
+    # Tablas resumen (se escriben al final, ya con los totales)
+    filas_resumen = [
+        (zona, (zona, dia, len(r[5]), r[0], r[1] / r[0], r[2] / r[0],
+                r[3] / r[0], r[4]))
+        for (zona, dia), r in resumen.items()
+    ]
+    total_batches += enviar_batches(session, stmt_resumen, filas_resumen)
+    enviar_individuales(session, stmt_ultima, list(ultima.values()))
+
+    duracion = time.time() - inicio
+    velocidad = total / duracion
+
+    if verbose:
+        print("-" * 50)
+        print(f"Mediciones cargadas: {total:,}")
+        print(f"Anomalías cargadas:  {total_anomalias:,}")
+        print(f"Batches enviados:    {total_batches:,}")
+        print(f"Tiempo:              {duracion:.1f} s")
+        print(f"Velocidad:           {velocidad:,.0f} filas/s")
+
+    if registrar:
+        registrar_resultado(total, total_anomalias, total_batches, duracion)
+
+    return {"filas": total, "anomalias": total_anomalias,
+            "batches": total_batches, "duracion": duracion,
+            "filas_por_seg": velocidad}
+
+
+def benchmark(session, sensores, limite=LIMITE_BENCHMARK):
+    """
+    Prueba varias combinaciones de batch / concurrencia / buffer y muestra
+    un ranking. Cada corrida queda registrada en resultados_carga.csv.
+    """
+    global TAMANO_BATCH, TAMANO_BUFFER, CONCURRENCIA
+    original = (TAMANO_BATCH, TAMANO_BUFFER, CONCURRENCIA)
+    resultados = []
+
+    try:
+        print("Calentamiento (no cuenta en el ranking)...")
+        TAMANO_BATCH, TAMANO_BUFFER, CONCURRENCIA = 50, 20_000, 32
+        cargar_mediciones(session, sensores, 20_000, verbose=False, registrar=False)
+
+        for i, (b, c, buf) in enumerate(CONFIGS_BENCHMARK, 1):
+            TAMANO_BATCH, CONCURRENCIA, TAMANO_BUFFER = b, c, buf
+            print(f"Prueba {i}/{len(CONFIGS_BENCHMARK)}: batch={b} "
+                  f"concurrencia={c} buffer={buf:,} ...")
+            r = cargar_mediciones(session, sensores, limite, verbose=False)
+            resultados.append((b, c, buf, r))
+    finally:
+        TAMANO_BATCH, TAMANO_BUFFER, CONCURRENCIA = original
+
+    resultados.sort(key=lambda x: x[3]["filas_por_seg"], reverse=True)
+
+    print("\n" + "=" * 62)
+    print(f"{'batch':>6} {'concurr.':>9} {'buffer':>9} {'batches':>9} {'seg':>7} {'filas/s':>9}")
+    print("=" * 62)
+    for b, c, buf, r in resultados:
+        print(f"{b:>6} {c:>9} {buf:>9,} {r['batches']:>9,} "
+              f"{r['duracion']:>7.1f} {r['filas_por_seg']:>9,.0f}")
+    print("=" * 62)
+    b, c, buf, r = resultados[0]
+    print(f"Mejor: batch={b} concurrencia={c} buffer={buf:,} "
+          f"({r['filas_por_seg']:,.0f} filas/s)")
+
+
+# ============================================================
+# EJECUCIÓN
+# ============================================================
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Carga de datos AquaSense CR")
+    parser.add_argument("--limit", type=int, default=NUM_MEDICIONES,
+                        help="cantidad de mediciones a cargar (default: 1,000,000)")
+    parser.add_argument("--batch", type=int, default=TAMANO_BATCH,
+                        help=f"filas por batch (default: {TAMANO_BATCH})")
+    parser.add_argument("--concurrency", type=int, default=CONCURRENCIA,
+                        help=f"operaciones en paralelo (default: {CONCURRENCIA})")
+    parser.add_argument("--buffer", type=int, default=TAMANO_BUFFER,
+                        help=f"filas acumuladas antes de enviar (default: {TAMANO_BUFFER})")
+    parser.add_argument("--benchmark", action="store_true",
+                        help="prueba varias configuraciones y muestra el ranking")
+    args = parser.parse_args()
+
+    TAMANO_BATCH = args.batch
+    CONCURRENCIA = args.concurrency
+    TAMANO_BUFFER = args.buffer
+
+    cluster, session = conectar()
+    try:
+        sensores = generar_sensores()
+        cargar_sensores(session, sensores)
+
+        if args.benchmark:
+            benchmark(session, sensores)
+        else:
+            print(f"Config: batch={TAMANO_BATCH} | concurrencia={CONCURRENCIA} | "
+                  f"buffer={TAMANO_BUFFER:,} | filas={args.limit:,}")
+            cargar_mediciones(session, sensores, args.limit)
+    finally:
+        cluster.shutdown()
