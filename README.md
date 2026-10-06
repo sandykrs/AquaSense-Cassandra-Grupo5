@@ -49,3 +49,32 @@ Luego, ejecutar cada consulta según el requisito del caso:
 | Detección de lecturas anómalas | `database/queries/consultas_anomalias.cql` |
 | Consulta o tabla de resumen agregado | `database/queries/consultas_resumen.cql` |
 
+## Pruebas, benchmarks y métricas
+
+Con Cassandra encendida y los datos cargados (ver "Carga de datos"):
+
+```bash
+pip install cassandra-driver pyasyncore
+python performance/verificar_carga.py     # verifica 1 000 000 de filas y las particiones
+python tests/test_consultas.py            # 9 pruebas funcionales de consultas
+python tests/test_concurrencia.py         # 3 pruebas de concurrencia (keyspace aparte)
+python performance/benchmark_lectura.py   # latencia p50 y p95 de 8 consultas
+```
+
+`pyasyncore` solo hace falta con Python 3.12 o más nuevo.
+
+**Benchmark de escritura.** Vacía las tablas y recarga el millón de mediciones en cada corrida, por lo que **borra los datos existentes**:
+
+```bash
+python performance/benchmark_escritura.py --corridas 3
+```
+
+**Stress test (`cassandra-stress`).** Usa un keyspace aparte (`aquasense_stress`) y no toca los datos del proyecto. Reemplace `NOMBRE_CONTENEDOR` por el nombre que muestra `docker ps`:
+
+```bash
+docker cp performance/stress_test.yaml NOMBRE_CONTENEDOR:/tmp/stress_test.yaml
+docker exec NOMBRE_CONTENEDOR /opt/cassandra/tools/bin/cassandra-stress user profile=/tmp/stress_test.yaml n=50000 "ops(insert=1)" no-warmup -rate threads=8
+docker exec NOMBRE_CONTENEDOR cqlsh -e "DROP KEYSPACE IF EXISTS aquasense_stress;"
+```
+
+Los resultados medidos están en `performance/resultados/`; el resumen es `tablas_metricas.md`.
