@@ -45,8 +45,9 @@ Finalmente, la escalabilidad horizontal es una característica esencial de este 
 ## III. Tecnología Seleccionada
 
 ### A. Apache Cassandra 5.0.9
+Para la implementación de la solución, se optó por Apache Cassandra, una base de datos de código abierto NoSQL que claramente se enmarca en el modelo de columnas anchas, diseñada para manejar grandes volúmenes de datos a través de múltiples nodos sin un punto único de fallo. Su arquitectura de tipo peer-to-peer, sin un nodo maestro, elimina los puntos únicos de fallo y permite que cualquier nodo dentro del clúster gestione solicitudes tanto de lectura como de escritura, lo que la hace ideal para un sistema de monitoreo que necesita funcionar de manera continua [2].
 
-Apache Cassandra es una base de datos NoSQL distribuida de columnas anchas, diseñada para manejar grandes volúmenes de datos a través de múltiples nodos sin un punto único de fallo. Originalmente desarrollada en Facebook y liberada como proyecto open source en 2008, hoy es mantenida por la Apache Software Foundation.
+Originalmente desarrollada en Facebook y liberada como proyecto open source en 2008, hoy es mantenida por la Apache Software Foundation.
 
 Sus características principales son:
 
@@ -59,6 +60,8 @@ Sus características principales son:
 
 ### B. Justificación de la elección
 
+La selección de Cassandra en lugar de otras opciones de columnas anchas está respaldada por varios factores. Primero, las pruebas experimentales de rendimiento indican que la base de datos se escala favorablemente al incrementar el número de nodos, mejorando notablemente los tiempos de respuesta en cargas de lectura y escritura con grandes volúmenes de datos [2]. En segundo lugar, su modelo de consistencia ajustable (configurable a través de niveles como ONE, QUORUM o ALL) permite encontrar un balance entre la disponibilidad del sistema y la precisión de los datos ofrecidos, lo que es una elección de diseño que afecta directamente el rendimiento observado en las evaluaciones [3].
+
 | Alternativa | Motivo del descarte |
 |---|---|
 | ScyllaDB | Compatible con CQL, pero con menos documentación y comunidad más pequeña. |
@@ -66,9 +69,10 @@ Sus características principales son:
 | Google Cloud Bigtable | Dependencia de la nube; el proyecto debe ser reproducible localmente. |
 | **Apache Cassandra** | **Elegida:** open source, madura, ampliamente documentada, fácil de levantar con Docker. |
 
-### C. Versión y entorno
+Además, Cassandra es gratuita y de código abierto bajo la licencia Apache 2.0, y se puede desplegar de manera reproducible utilizando contenedores Docker en cualquier sistema operativo que soporte dicha tecnología, cumpliendo así con el requerimiento de que la solución funcione sin depender de licencias costosas ni de credenciales privadas.
 
-Se utilizó **Apache Cassandra 5.0.9** en un contenedor Docker. Para desarrollo local se usó `SimpleStrategy` con factor de replicación 1. Para producción se documenta el uso de `NetworkTopologyStrategy` con RF=3.
+### C. Versión y entorno
+Versión utilizada: se utilizó Apache Cassandra 5.0.9, desplegada mediante Docker en un contenedor único (clúster "AquaSenseCluster"). Para el entorno de desarrollo se empleó la estrategia de replicación SimpleStrategy con factor de replicación 1; para un entorno de producción se documenta el uso recomendado de NetworkTopologyStrategy con factor de replicación 3  (RF=3).
 
 ---
 
