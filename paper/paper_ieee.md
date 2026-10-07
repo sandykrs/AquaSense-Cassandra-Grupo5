@@ -49,7 +49,10 @@ Las lecturas anómalas se producen a través de una probabilidad constante del 2
 
 ## VI. Pruebas y Resultados
 
-## VII. Limitaciones y análisis
+## VII. Limitaciones 
+El clúster de pruebas se implementó con un solo nodo y una estrategia de replicación SimpleStrategy cuyo factor de replicación es 1. Esta configuración es apropiada para un ambiente de desarrollo reproducible en una única máquina, sin embargo, no permite evidenciar experimentalmente las capacidades de replicación y tolerancia a fallos de nodo que proporciona Cassandra en un despliegue distribuido de producción con varios nodos (para lo cual se sugiere, como trabajo futuro, el uso de NetworkTopologyStrategy con un factor de replicación de 3).
+
+Igualmente, las pruebas de rendimiento se llevaron a cabo en una sola máquina de desarrollo, por lo que los resultados obtenidos representan el comportamiento del sistema bajo esas condiciones particulares de hardware, y podrían cambiar en un entorno de producción con recursos asignados.
 
 ## VIII. Conclusiones
 
