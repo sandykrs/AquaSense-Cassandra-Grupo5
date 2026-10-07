@@ -82,6 +82,8 @@ Versión utilizada: se utilizó Apache Cassandra 5.0.9, desplegada mediante Dock
 
 Cassandra es **query-driven**: las tablas se diseñan a partir de las consultas, no de un modelo normalizado. Cada consulta frecuente tiene su propia tabla desnormalizada, ya que Cassandra no soporta joins eficientes.
 
+Este método sugiere que, antes de crear cualquier tabla, es esencial determinar con exactitud los patrones de acceso que la aplicación deberá manejar. Para AquaSense CR, esos patrones se relacionan con los siete requisitos esenciales establecidos para el caso: verificación de lecturas recientes por sensor, consulta por área y tiempo, identificación de anomalías, y creación de resúmenes consolidados, entre otros.
+
 ### B. Tablas del modelo
 
 El keyspace `aquasense` contiene 8 tablas:
@@ -97,6 +99,8 @@ El keyspace `aquasense` contiene 8 tablas:
 | `resumen_diario_zona` | Agregados diarios | `zona` | `dia DESC` |
 | `ultima_lectura_sensor` | Última lectura por sensor | `sensor_id` | — |
 
+Como se puede notar, las tablas lecturas_por_sensor y lecturas_por_zona abordan el mismo tipo de datos (las lecturas de los sensores), aunque divididas según dos criterios de acceso diferentes. Esta intencionada repetición de datos (una acción que se evitaría) en un modelo relacional normalizado es justo lo que permite que ambas consultas (por sensor y por zona) se atiendan con acceso directo a la partición correspondiente, sin requerir operaciones adicionales de filtrado o combinación entre tablas [2].
+
 ### C. Decisiones clave de diseño
 
 1. **Bucketing diario:** el campo `bucket` (tipo `date`) agrupa las lecturas por día para evitar particiones gigantes.
@@ -104,6 +108,8 @@ El keyspace `aquasense` contiene 8 tablas:
 3. **TimeWindowCompactionStrategy (TWCS):** agrupa SSTables por ventana de 1 día, óptimo para series de tiempo.
 4. **Desnormalización:** cada lectura se escribe en `lecturas_por_sensor` y `lecturas_por_zona`, aceptando el costo de escritura a cambio de lecturas rápidas.
 5. **Tablas dedicadas para anomalías:** evitan el uso de `ALLOW FILTERING`.
+
+El primer punto (bucketing diario) requiere atención especial, pues aborda directamente uno de los requisitos explícitos del caso: prevenir que una partición acumule un volumen de datos excesivo a medida que se expande el historial de mediciones. Sin este mecanismo, una partición definida exclusivamente por sensor_id o por zona se expandiría de manera indefinida con el tiempo, perjudicando el rendimiento de lectura de esa partición en particular [2].
 
 ### D. Arquitectura de la solución
 
@@ -121,6 +127,10 @@ La arquitectura consta de cuatro capas:
 - **Replicación RF=3:** cada dato existe en 3 nodos.
 - **Sin punto único de fallo:** cualquier nodo puede responder consultas.
 - **Recuperación:** `nodetool repair` sincroniza réplicas tras fallos.
+
+Es fundamental señalar que estas características de replicación y resistencia a fallos se refieren a la configuración sugerida para un entorno de producción (RF=3 de varios nodos). El entorno de pruebas empleado en este proyecto funciona con un solo nodo y un factor de replicación de 1, una configuración idónea para el desarrollo reproducible en una única máquina, aunque no permite evidenciar experimentalmente esas capacidades de replicación, esta restricción se aborda en la Sección VIII.
+
+diagrama ¿?
 
 ## V. Implementación
 
