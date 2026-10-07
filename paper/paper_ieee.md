@@ -18,6 +18,15 @@ Jeferson
 
 ---
 ## I. Introducción y Problema
+Las organizaciones que operan infraestructuras críticas, como las redes de distribución de agua potable, enfrentan hoy un crecimiento constante en el volumen de datos generados por sus procesos de monitoreo. Esta tendencia ha impulsado la adopción de bases de datos NoSQL, una alternativa que surge frente a las limitaciones de escalabilidad y flexibilidad de esquema que presentan los modelos relacionales tradicionales cuando deben gestionar grandes volúmenes de información [1].
+
+AquaSense CR es una empresa que monitorea redes de agua potable mediante sensores de caudal, presión, temperatura y calidad instalados en distintas zonas de su infraestructura. Estos dispositivos generan lecturas de forma continua, lo que exige un sistema de almacenamiento capaz de absorber una alta frecuencia de escritura sin degradar su desempeño, además de permitir consultas rápidas de series de tiempo por sensor y por intervalo, incluso cuando el volumen histórico de datos crece de manera sostenida durante meses de operación.
+
+Esta problemática no es exclusiva de AquaSense CR. Experiencias similares en plantas de tratamiento de agua potable muestran que los sistemas de monitoreo manual o discontinuo limitan la capacidad de detectar cambios repentinos en los parámetros críticos y dificultan el ajuste oportuno de los procesos operativos [4]. La digitalización de estas infraestructuras mediante sensores y sistemas de almacenamiento especializados representa, por tanto, una alternativa viable para superar dichas limitaciones.
+
+Los modelos de bases de datos relacionales, al estar optimizados para transacciones estructuradas y consultas complejas mediante uniones (joins) entre tablas, no están diseñados para sostener cargas de escritura masivas y continuas como las que produce una red de sensores de monitoreo. Casos de uso similares, como el almacenamiento de datos de telemetría para el monitoreo estructural de infraestructuras, han optado por bases de datos especializadas en grandes volúmenes de datos, evidenciando que los sistemas NoSQL de tipo columnas anchas se ajustan particularmente bien a necesidades de ingestión intensiva y consulta eficiente por rangos temporales [5].
+
+En este contexto, el presente trabajo tiene como objetivo diseñar e implementar una solución de datos basada en el modelo de columnas anchas, utilizando Apache Cassandra, que permita a AquaSense CR ingerir de forma continua las lecturas de sus sensores, consultar eficientemente por sensor, zona y rango de tiempo, y mantener un desempeño estable y escalable a medida que el volumen de datos crece. La selección de esta tecnología se sustenta en evaluaciones previas de rendimiento y escalabilidad de Cassandra [2], así como en estudios sobre el comportamiento de su modelo de consistencia ajustable frente a distintas cargas de trabajo [3], aspectos que se detallan en las secciones siguientes.
 
 ## II. Fundamentos del Modelo NoSQL (Columnas Anchas)
 Las bases de datos NoSQL aparecieron como solución a la necesidad de manejar volúmenes de datos crecientes y con estructuras más diversas, en situaciones donde el modelo relacional clásico muestra limitaciones de escalabilidad y rigidez de esquema [1]. A diferencia de las bases de datos relacionales, que estructuran la información en tablas con un esquema rígido y relaciones establecidas, las bases de datos NoSQL se enfocan en la distribución horizontal de los datos y permiten estructuras más versátiles, ajustadas a las necesidades particulares de cada aplicación.
@@ -35,7 +44,93 @@ Finalmente, la escalabilidad horizontal es una característica esencial de este 
 
 ## III. Tecnología Seleccionada
 
+### A. Apache Cassandra 5.0.9
+Para la implementación de la solución, se optó por Apache Cassandra, una base de datos de código abierto NoSQL que claramente se enmarca en el modelo de columnas anchas, diseñada para manejar grandes volúmenes de datos a través de múltiples nodos sin un punto único de fallo. Su arquitectura de tipo peer-to-peer, sin un nodo maestro, elimina los puntos únicos de fallo y permite que cualquier nodo dentro del clúster gestione solicitudes tanto de lectura como de escritura, lo que la hace ideal para un sistema de monitoreo que necesita funcionar de manera continua [2].
+
+Originalmente desarrollada en Facebook y liberada como proyecto open source en 2008, hoy es mantenida por la Apache Software Foundation.
+
+Sus características principales son:
+
+- **Arquitectura peer-to-peer:** todos los nodos son iguales, sin maestro.
+- **Escalabilidad horizontal lineal:** agregar nodos aumenta la capacidad proporcionalmente.
+- **Alta disponibilidad:** replicación configurable y sin downtime.
+- **Consistencia ajustable:** desde ONE hasta ALL.
+- **Modelo wide-column:** ideal para series de tiempo.
+- **CQL (Cassandra Query Language):** sintaxis similar a SQL.
+
+### B. Justificación de la elección
+
+La selección de Cassandra en lugar de otras opciones de columnas anchas está respaldada por varios factores. Primero, las pruebas experimentales de rendimiento indican que la base de datos se escala favorablemente al incrementar el número de nodos, mejorando notablemente los tiempos de respuesta en cargas de lectura y escritura con grandes volúmenes de datos [2]. En segundo lugar, su modelo de consistencia ajustable (configurable a través de niveles como ONE, QUORUM o ALL) permite encontrar un balance entre la disponibilidad del sistema y la precisión de los datos ofrecidos, lo que es una elección de diseño que afecta directamente el rendimiento observado en las evaluaciones [3].
+
+| Alternativa | Motivo del descarte |
+|---|---|
+| ScyllaDB | Compatible con CQL, pero con menos documentación y comunidad más pequeña. |
+| Apache HBase | Requiere Hadoop y Zookeeper; mayor complejidad operativa. |
+| Google Cloud Bigtable | Dependencia de la nube; el proyecto debe ser reproducible localmente. |
+| **Apache Cassandra** | **Elegida:** open source, madura, ampliamente documentada, fácil de levantar con Docker. |
+
+Además, Cassandra es gratuita y de código abierto bajo la licencia Apache 2.0, y se puede desplegar de manera reproducible utilizando contenedores Docker en cualquier sistema operativo que soporte dicha tecnología, cumpliendo así con el requerimiento de que la solución funcione sin depender de licencias costosas ni de credenciales privadas.
+
+### C. Versión y entorno
+Versión utilizada: se utilizó Apache Cassandra 5.0.9, desplegada mediante Docker en un contenedor único (clúster "AquaSenseCluster"). Para el entorno de desarrollo se empleó la estrategia de replicación SimpleStrategy con factor de replicación 1; para un entorno de producción se documenta el uso recomendado de NetworkTopologyStrategy con factor de replicación 3  (RF=3).
+
+---
+
 ## IV. Modelo y Arquitectura
+
+### A. Filosofía de modelado
+
+Cassandra es **query-driven**: las tablas se diseñan a partir de las consultas, no de un modelo normalizado. Cada consulta frecuente tiene su propia tabla desnormalizada, ya que Cassandra no soporta joins eficientes.
+
+Este método sugiere que, antes de crear cualquier tabla, es esencial determinar con exactitud los patrones de acceso que la aplicación deberá manejar. Para AquaSense CR, esos patrones se relacionan con los siete requisitos esenciales establecidos para el caso: verificación de lecturas recientes por sensor, consulta por área y tiempo, identificación de anomalías, y creación de resúmenes consolidados, entre otros.
+
+### B. Tablas del modelo
+
+El keyspace `aquasense` contiene 8 tablas:
+
+| Tabla | Propósito | Partition Key | Clustering Key |
+|---|---|---|---|
+| `sensores` | Catálogo de sensores | `sensor_id` | — |
+| `sensores_por_zona` | Sensores por zona | `zona` | `sensor_id` |
+| `lecturas_por_sensor` | Series de tiempo por sensor | `(sensor_id, bucket)` | `fecha_hora DESC` |
+| `lecturas_por_zona` | Series de tiempo por zona | `(zona, bucket)` | `fecha_hora DESC, sensor_id ASC` |
+| `anomalias_por_sensor` | Anomalías por sensor | `(sensor_id, bucket)` | `fecha_hora DESC` |
+| `anomalias_por_zona` | Anomalías por zona | `(zona, bucket)` | `fecha_hora DESC, sensor_id ASC` |
+| `resumen_diario_zona` | Agregados diarios | `zona` | `dia DESC` |
+| `ultima_lectura_sensor` | Última lectura por sensor | `sensor_id` | — |
+
+Como se puede notar, las tablas lecturas_por_sensor y lecturas_por_zona abordan el mismo tipo de datos (las lecturas de los sensores), aunque divididas según dos criterios de acceso diferentes. Esta intencionada repetición de datos (una acción que se evitaría) en un modelo relacional normalizado es justo lo que permite que ambas consultas (por sensor y por zona) se atiendan con acceso directo a la partición correspondiente, sin requerir operaciones adicionales de filtrado o combinación entre tablas [2].
+
+### C. Decisiones clave de diseño
+
+1. **Bucketing diario:** el campo `bucket` (tipo `date`) agrupa las lecturas por día para evitar particiones gigantes.
+2. **Clustering DESC:** las últimas lecturas se devuelven primero sin ordenamiento adicional.
+3. **TimeWindowCompactionStrategy (TWCS):** agrupa SSTables por ventana de 1 día, óptimo para series de tiempo.
+4. **Desnormalización:** cada lectura se escribe en `lecturas_por_sensor` y `lecturas_por_zona`, aceptando el costo de escritura a cambio de lecturas rápidas.
+5. **Tablas dedicadas para anomalías:** evitan el uso de `ALLOW FILTERING`.
+
+El primer punto (bucketing diario) requiere atención especial, pues aborda directamente uno de los requisitos explícitos del caso: prevenir que una partición acumule un volumen de datos excesivo a medida que se expande el historial de mediciones. Sin este mecanismo, una partición definida exclusivamente por sensor_id o por zona se expandiría de manera indefinida con el tiempo, perjudicando el rendimiento de lectura de esa partición en particular [2].
+
+### D. Arquitectura de la solución
+
+La arquitectura consta de cuatro capas:
+
+1. **Capa de sensores:** 1.000 sensores distribuidos en 20 zonas que generan telemetría continua.
+2. **Capa de ingesta:** scripts Python que generan y cargan los datos en lotes.
+3. **Clúster Cassandra:** nodo único en desarrollo (3 nodos en producción con RF=3).
+4. **Capa de consulta:** scripts CQL y Python que sirven las consultas operativas.
+
+
+### E. Escalabilidad y alta disponibilidad
+
+- **Escalabilidad horizontal:** agregar nodos distribuye datos automáticamente mediante consistent hashing.
+- **Replicación RF=3:** cada dato existe en 3 nodos.
+- **Sin punto único de fallo:** cualquier nodo puede responder consultas.
+- **Recuperación:** `nodetool repair` sincroniza réplicas tras fallos.
+
+Es fundamental señalar que estas características de replicación y resistencia a fallos se refieren a la configuración sugerida para un entorno de producción (RF=3 de varios nodos). El entorno de pruebas empleado en este proyecto funciona con un solo nodo y un factor de replicación de 1, una configuración idónea para el desarrollo reproducible en una única máquina, aunque no permite evidenciar experimentalmente esas capacidades de replicación, esta restricción se aborda en la Sección VIII.
+
+diagrama ¿?
 
 ## V. Implementación
 
