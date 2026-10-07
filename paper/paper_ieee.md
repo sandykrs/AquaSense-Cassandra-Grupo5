@@ -31,7 +31,7 @@ Jeferson
 
 ## VII. Resultados
 
-## VIII. Limitaciones
+## VIII. Limitaciones y análisis
 
 ## IX. Conclusiones
 
