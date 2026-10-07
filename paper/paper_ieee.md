@@ -39,6 +39,13 @@ Finalmente, la escalabilidad horizontal es una característica esencial de este 
 
 ## V. Implementación
 
+Se desarrolló un generador (data/generate_data.py) que genera datos sintéticos de forma reproducible utilizando una semilla constante, simulando 1000 sensores distribuidos en 7 áreas que corresponden a provincias de Costa Rica, con un volumen mínimo de 1 000 000 de mediciones y un porcentaje fijo del 2% de lecturas anómalas incluidas intencionalmente para validar su detección posterior. El generador también recrea un patrón de consumo diario realista, modificando el caudal según la hora del día a través de una función senoidal que imita una mayor demanda durante el día y una menor en la madrugada.
+
+La carga de datos (data/load_data.py) se llevó a cabo a través de ingesta asíncrona mediante execute_concurrent del controlador oficial de Cassandra para Python, con un nivel de concurrencia ajustable (32 operaciones simultáneas por defecto). Las escrituras se llevan a cabo mediante sentencias preparadas (prepared statements) organizadas en lotes no registrados (UNLOGGED batches) de tamaño ajustable (50 filas por defecto), que se acumulan en un búfer antes de ser enviados al clúster (20 000 filas por defecto). Esta mezcla de métodos disminuye notablemente la carga de comunicación con el clúster en comparación con inserciones individuales síncronas, alineándose con las sugerencias de la literatura sobre el rendimiento de Cassandra en contextos de escritura intensiva [2].
+Las consultas correspondientes a cada requisito del caso se implementaron en los archivos database/queries/consultas_sensor.cql, consultas_zona.cql, consultas_anomalias.cql y consultas_resumen.cql, ejecutadas a través de la consola cqlsh del clúster.
+
+Las lecturas anómalas se producen a través de una probabilidad constante del 2% que se aplica a cada medición simulada. Cuando una medición se identifica como anómala, se le asigna de manera aleatoria uno de seis tipos posibles de anomalía: fuga, baja presión, alta presión, temperatura elevada, caudal irregular, o mala calidad. Cada clase de anomalía altera los valores de caudal, presión y temperatura de manera realista; por ejemplo, una fuga aumenta el caudal de 1.6 a 2.5 veces su valor original y disminuye la presión entre un 30% y un 60%. Este campo booleano (anomalia) se guarda directamente en las tablas de lecturas y se replica en las tablas específicas de anomalías (anomalias_por_sensor, anomalias_por_zona), lo que elimina la necesidad de la operación ALLOW FILTERING.
+
 ## VI. Pruebas
 
 ## VII. Resultados
