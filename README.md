@@ -24,56 +24,59 @@ Para ejecutar este proyecto de forma local se requiere:
 ## Instalación
 1. Clonar el repositorio y entrar a la carpeta:
 ```bash
-git clone [https://github.com/sandykrs/AquaSense-Cassandra-Grupo5.git](https://github.com/sandykrs/AquaSense-Cassandra-Grupo5.git)
+git clone https://github.com/sandykrs/AquaSense-Cassandra-Grupo5.git
 cd AquaSense-Cassandra-Grupo5
 ```
 
 2. Levantar el contenedor de Cassandra:
 ```bash
-docker-compose up -d
+docker-compose up -d --build
 ```
-
-3. Crear el esquema de la base de datos:
+3. verificar que el contenedor se está ejecutando
 ```bash
-docker exec -it aquasense cqlsh -f /database/schema/schema.cql
+docker ps
 ```
-
-4. Generación y Carga de datos:
+4. Esperar a que Cassandra esté disponible y verificar la conexión:
 ```bash
-docker exec -it aquasense bash -c "python3 /data/generate_data.py && python3 /data/load_data.py"
+docker exec -it aquasense cqlsh -e "DESCRIBE CLUSTER"
 ```
-
+5. Crear el esquema de la base de datos:
+```bash
+docker exec -it aquasense cqlsh -f /schema.cql
+```
+6. Ejecutar la carga masiva de datos:
+```bash
+docker exec -it aquasense python3 /data/load_data.py
+```
 ## Prueba y demostración
-Primero, crear las tablas en Cassandra:
 
+Para ejecutar las consultas requeridas y verificar los resultados:
+
+1. Consultar últimas lecturas de un sensor:
 ```bash
-docker exec -it cassandra cqlsh -f database/schema/schema.cql
-```
-1. Consultar últimas lecturas de un sensor / rango temporal:
-```bash
-docker exec -it aquasense cqlsh -f /database/queries/consultas_sensor.cql
+docker exec -it aquasense cqlsh -f /queries/consultas_sensor.cql
 ```
 
-2. Consultar métricas por zona y periodo:
+2. Métricas por zona
 ```bash
-docker exec -it aquasense cqlsh -f /database/queries/consultas_zona.cql
+docker exec -it aquasense cqlsh -f /queries/consultas_zona.cql
 ```
 
 3. Detección de lecturas anómalas:
 ```bash
-docker exec -it aquasense cqlsh -f /database/queries/consultas_anomalias.cql
+docker exec -it aquasense cqlsh -f /queries/consultas_anomalias.cql
 ```
 
 4. Consulta de resumen agregado:
 ```bash
-docker exec -it aquasense cqlsh -f /database/queries/consultas_resumen.cql
+docker exec -it aquasense cqlsh -f /queries/consultas_resumen.cql
 ```
 Luego, ejecutar cada consulta según el requisito del caso:
 
 | Requisito del caso | Archivo |
 |---|---|
 | Últimas lecturas de un sensor / rango temporal | `database/queries/consultas_sensor.cql` |
-| Consulta por zona y periodo | `database/queries/consultas_zona.cql` |
+| Consulta por zona  | `database/queries/consultas_zona.cql` |
 | Detección de lecturas anómalas | `database/queries/consultas_anomalias.cql` |
 | Consulta o tabla de resumen agregado | `database/queries/consultas_resumen.cql` |
 
