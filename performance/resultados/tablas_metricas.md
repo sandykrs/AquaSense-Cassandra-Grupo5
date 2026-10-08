@@ -196,3 +196,36 @@ Validación: con 4 hilos, 60 328 filas/s entre 1 828 op/s da 33 filas por operac
 
 \- Las cargas varían mucho según el estado de la laptop (139 a 288 s).
 
+\## 9. Mediciones con el generador de main (compose, heap de 1 GB)
+
+Entorno: contenedor `aquasense` del `docker-compose.yml` (Cassandra 5.0.9, heap máximo de 1 024 MB). Generador de `main`: semilla 42, una lectura cada 15 minutos por sensor, 5 % de sensores inactivos, 2 % de anomalías, 7 zonas.
+
+| Medición | Generador inicial | Generador de main |
+|---|---|---|
+| Carga del millón (compose) | 143.8 s, 6 956 filas/s | 126.0 s, 7 938 filas/s |
+| Filas verificadas | 1 000 000 | 1 000 000 |
+| Anomalías | 15 176 (1.52 %) | 19 970 (2.00 %) |
+| Particiones sensor-día | 30 000 | 10 494 |
+| Filas por partición | 33 a 34 | 88 a 96 |
+| Tamaño máximo, partición sensor-día | 2 299 bytes | 6 866 bytes |
+| Particiones zona-día | 600 | 84 |
+| Tamaño máximo, partición zona-día | 126 934 bytes | 943 127 bytes |
+
+Latencia de lectura desde Python (30 repeticiones, mediana / p95 en ms):
+
+| Consulta | Filas | Generador inicial | Generador de main |
+|---|---|---|---|
+| Última lectura de un sensor | 1 | 4.0 / 5.0 | 3.9 / 5.2 |
+| Últimas 10 lecturas de un sensor | 10 | 4.4 / 5.0 | 4.4 / 6.3 |
+| Sensor y 1 día | 96 | 4.6 / 6.5 | 7.0 / 8.8 |
+| Sensor y 7 días | 664 | 12.2 / 17.3 | 24.5 / 32.3 |
+| Zona y 1 día | 13 091 | 39.1 / 50.7 | 201.5 / 316.4 |
+| Anomalías de un sensor | 2 | 3.9 / 4.8 | 2.6 / 3.7 |
+| Anomalías de una zona | 255 | 4.9 / 5.9 | 6.7 / 10.5 |
+| Resumen diario de una zona | 7 | 3.9 / 6.9 | 2.9 / 3.2 |
+
+Hallazgos:
+- El generador de main reparte los sensores en 7 zonas; el caso exige 20. La prueba `test_cantidad_de_sensores_y_zonas` falla por esto.
+- La tabla por zona concentra 84 particiones de hasta unos 921 KB, y su consulta tarda unos 200 ms: cumple el requisito de no escanear la base, pero es el punto débil del diseño (riesgo de hotspot de escritura en un clúster real).
+- El README indica el contenedor `cassandra` y el comando `cqlsh -f database/schema/schema.cql`, que no funcionan con el compose (contenedor `aquasense`, esquema montado en `/schema.cql`).
+
