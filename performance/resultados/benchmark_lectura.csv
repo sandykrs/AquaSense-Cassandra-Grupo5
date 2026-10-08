@@ -1,9 +1,9 @@
 consulta,repeticiones,p50_ms,p95_ms,media_ms,min_ms,max_ms,filas_promedio
-Ultima lectura de un sensor (tabla derivada),30,4.01,4.98,4.07,3.48,5.23,1
-Ultimas 10 lecturas de un sensor (dia reciente),30,4.43,5.01,4.36,3.73,5.05,10
-Sensor y rango de 1 dia,30,4.58,6.49,4.76,4.14,7.17,34
-Sensor y rango de 7 dias,30,12.17,17.26,12.9,10.88,17.39,233
-Zona y 1 dia,30,39.07,50.74,40.01,36.33,57.43,1675
-Anomalias de un sensor (dia con anomalias),30,3.93,4.75,3.96,3.36,4.82,1.4
-Anomalias de una zona (dia con anomalias),30,4.91,5.9,4.99,4.23,5.98,25.3
-Resumen diario de una zona (ultimos 7 dias),30,3.93,6.9,4.25,3.33,8.69,7
+Ultima lectura de un sensor (tabla derivada),30,3.93,5.15,3.94,3.3,5.76,1
+Ultimas 10 lecturas de un sensor (dia reciente),30,4.43,6.33,4.57,3.54,7.34,10
+Sensor y rango de 1 dia,30,6.98,8.82,6.95,5.62,9.1,96
+Sensor y rango de 7 dias,30,24.51,32.3,25.39,21.25,32.97,664.2
+Zona y 1 dia,30,201.49,316.44,205.03,105.34,332.47,13091.2
+Anomalias de un sensor (dia con anomalias),30,2.59,3.69,2.71,2.22,3.76,2.2
+Anomalias de una zona (dia con anomalias),30,6.74,10.46,7.26,5.21,10.58,254.8
+Resumen diario de una zona (ultimos 7 dias),30,2.85,3.23,2.81,2.32,3.25,7
