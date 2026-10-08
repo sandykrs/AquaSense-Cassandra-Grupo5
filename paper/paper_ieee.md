@@ -12,9 +12,10 @@ Jeferson
 
 ---
 
-## Resumen (Abstract)
 
-**Palabras clave:** Apache Cassandra, Wide-Column, NoSQL, Telemetría, Series de Tiempo.
+**_Resumen_**—Este trabajo propone una solución al caso de Aquansence CR mediante un modelo NoSQL de columnas anchas usando Apache Cassandra, ya que esta empresa requiere un sistema para almacenar gran cantidad de lecturas sobre el agua potable proveniente de sus sensores de caudal, presión, temperatura y calidad. El modelo se creó basándose en patrones de consulta. Incluye ocho tablas desnormalizadas. Estas tablas están particionadas por sensor o por área. También están particionadas por día. Las tablas tienen ordenamiento temporal en orden descendente. Se usa compactación por intervalos de tiempo. Esto evita que las particiones sean muy grandes. Se creó un conjunto sintético. Este conjunto tiene 1 000 sensores. Los sensores están distribuidos en 20 áreas. El conjunto contiene 1 000 000 de mediciones. La creación del conjunto fue replicable., Con un 2 % de lecturas anómalas, cargado mediante escritura asíncrona usando sentencias preparadas y lotes no registrados. Las pruebas se hicieron en un clúster de un solo nodo con factor de replicación 1.
+
+**Palabras clave:** Apache Cassandra, Wide-Column, NoSQL, Telemetría, Series de Tiempo, Bases de Datos, Sensores IoT, Ingestión Masiva de Datos.
 
 ---
 ## I. Introducción y Problema
@@ -26,10 +27,10 @@ Esta problemática no es exclusiva de AquaSense CR. Experiencias similares en pl
 
 Los modelos relacionales, ajustados para transacciones estructuradas y combinaciones (joins), no están diseñados para escrituras masivas y constantes como las de una red de sensores. En un caso similar, el almacenamiento de datos de sensores para el monitoreo de estructuras civiles, se eligió Cassandra debido a su elevada velocidad de lectura y escritura, y el prototipo mostró un rendimiento notablemente mejor en las consultas de subconjuntos de datos [5].
 
-En este contexto, el presente trabajo tiene como objetivo diseñar e implementar una solución de datos basada en el modelo de columnas anchas, utilizando Apache Cassandra, que permita a AquaSense CR ingerir de forma continua las lecturas de sus sensores, consultar eficientemente por sensor, zona y rango de tiempo, y mantener un desempeño estable y escalable a medida que el volumen de datos crece. La selección de esta tecnología se sustenta en evaluaciones previas de rendimiento y escalabilidad de Cassandra [2], así como en estudios sobre el comportamiento de su modelo de consistencia ajustable frente a distintas cargas de trabajo [3], aspectos que se detallan en las secciones siguientes.
+Este trabajo tiene como objetivo diseñar e implementar una solución de datos basada en el modelo de columnas anchas, utilizando Apache Cassandra, que permita a AquaSense CR ingerir de forma continua las lecturas de sus sensores, consultar eficientemente por sensor, zona y rango de tiempo, y mantener un desempeño estable y escalable a medida que el volumen de datos crece. La selección de esta tecnología se sustenta en evaluaciones previas de rendimiento y escalabilidad de Cassandra [2], así como en estudios sobre el comportamiento de su modelo de consistencia ajustable frente a distintas cargas de trabajo [3], aspectos que se detallan en las secciones siguientes.
 
 ## II. Fundamentos del Modelo NoSQL (Columnas Anchas)
-Las bases de datos NoSQL aparecieron como solución a la necesidad de manejar volúmenes de datos crecientes y con estructuras más diversas, en situaciones donde el modelo relacional clásico muestra limitaciones de escalabilidad y rigidez de esquema [1]. A diferencia de las bases de datos relacionales, que estructuran la información en tablas con un esquema rígido y relaciones establecidas, las bases de datos NoSQL se enfocan en la distribución horizontal de los datos y permiten estructuras más versátiles, ajustadas a las necesidades particulares de cada aplicación.
+Las bases de datos NoSQL aparecieron como solución a la necesidad de procesar garndes volúmenes de datos crecientes y con estructuras más diversas, en situaciones donde el modelo relacional clásico muestra limitaciones de escalabilidad y rigidez de esquema [1]. Sabemos que las bases de datos relacionales, que estructuran la información en tablas con un esquema rígido y relaciones establecidas, las bases de datos NoSQL se enfocan en la distribución horizontal de los datos y permiten estructuras más versátiles, ajustadas a las necesidades particulares de cada aplicación.
 
 En la clasificación de bases de datos NoSQL, el modelo de columnas anchas (wide-column) se distingue por estructurar la información en filas identificadas por una clave, donde cada fila puede tener un número variable de columnas agrupadas en familias de columnas [2]. A diferencia de una tabla relacional tradicional, no es imprescindible que todas las filas tengan la misma estructura de columnas, lo que proporciona flexibilidad al modelo sin perder la organización tabular.
 
@@ -45,7 +46,7 @@ Finalmente, la escalabilidad horizontal es una característica esencial de este 
 ## III. Tecnología Seleccionada
 
 ### A. Apache Cassandra 5.0.9
-Para la implementación de la solución, se optó por Apache Cassandra, una base de datos de código abierto NoSQL que claramente se enmarca en el modelo de columnas anchas, diseñada para manejar grandes volúmenes de datos a través de múltiples nodos sin un punto único de fallo. Su arquitectura de tipo peer-to-peer, sin un nodo maestro, elimina los puntos únicos de fallo y permite que cualquier nodo dentro del clúster gestione solicitudes tanto de lectura como de escritura, lo que la hace ideal para un sistema de monitoreo que necesita funcionar de manera continua [2].
+Para la implementación de la solución, se optó por Apache Cassandra, una base de datos de código abierto NoSQL que claramente se enmarca en el modelo de columnas anchas, diseñada para manejar grandes volúmenes de datos a través de múltiples nodos. Su arquitectura de tipo peer-to-peer, sin un nodo maestro, elimina los puntos únicos de fallo y permite que cualquier nodo dentro del clúster gestione solicitudes tanto de lectura como de escritura, lo que la hace ideal para un sistema de monitoreo que necesita funcionar de manera continua [2].
 
 Originalmente desarrollada en Facebook y liberada como proyecto open source en 2008, hoy es mantenida por la Apache Software Foundation.
 
@@ -134,7 +135,7 @@ diagrama ¿?
 
 ## V. Implementación
 
-Se desarrolló un generador (data/generate_data.py) que genera datos sintéticos de forma reproducible utilizando una semilla constante, simulando 1000 sensores distribuidos en 7 áreas que corresponden a provincias de Costa Rica, con un volumen mínimo de 1 000 000 de mediciones y un porcentaje fijo del 2% de lecturas anómalas incluidas intencionalmente para validar su detección posterior. El generador también recrea un patrón de consumo diario realista, modificando el caudal según la hora del día a través de una función senoidal que imita una mayor demanda durante el día y una menor en la madrugada.
+Se desarrolló un generador (data/generate_data.py) que genera datos sintéticos de forma reproducible utilizando una semilla constante, simulando 1000 sensores distribuidos en 20 áreas que corresponden a provincias de Costa Rica, con un volumen mínimo de 1 000 000 de mediciones y un porcentaje fijo del 2% de lecturas anómalas incluidas intencionalmente para validar su detección posterior. El generador también recrea un patrón de consumo diario realista, modificando el caudal según la hora del día a través de una función senoidal que imita una mayor demanda durante el día y una menor en la madrugada.
 
 La carga de datos (data/load_data.py) se llevó a cabo a través de ingesta asíncrona mediante execute_concurrent del controlador oficial de Cassandra para Python, con un nivel de concurrencia ajustable (32 operaciones simultáneas por defecto). Las escrituras se llevan a cabo mediante sentencias preparadas (prepared statements) organizadas en lotes no registrados (UNLOGGED batches) de tamaño ajustable (50 filas por defecto), que se acumulan en un búfer antes de ser enviados al clúster (20 000 filas por defecto). Cassandra está optimizada para cargas intensivas de escritura gracias al uso secuencial del disco [2]. Para aprovecharlo, la carga combina escritura asíncrona concurrente, sentencias preparadas y lotes no registrados agrupados por partición.
 
