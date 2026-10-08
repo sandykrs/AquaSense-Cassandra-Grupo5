@@ -3,7 +3,7 @@ test_cantidad_de_sensores_y_zonas (__main__.PruebasConsultas.test_cantidad_de_se
 test_lecturas_de_un_sensor_ordenadas_por_tiempo (__main__.PruebasConsultas.test_lecturas_de_un_sensor_ordenadas_por_tiempo) ... ok
 test_lecturas_por_zona_y_dia (__main__.PruebasConsultas.test_lecturas_por_zona_y_dia) ... ok
 test_no_se_permite_escaneo_sin_clave_de_particion (__main__.PruebasConsultas.test_no_se_permite_escaneo_sin_clave_de_particion) ... ok
-test_rango_de_siete_dias (__main__.PruebasConsultas.test_rango_de_siete_dias) ... FAIL
+test_rango_de_siete_dias (__main__.PruebasConsultas.test_rango_de_siete_dias) ... ok
 test_resumen_diario_de_una_zona (__main__.PruebasConsultas.test_resumen_diario_de_una_zona) ... ok
 test_tablas_existen (__main__.PruebasConsultas.test_tablas_existen) ... ok
 test_ultima_lectura_es_la_mas_reciente (__main__.PruebasConsultas.test_ultima_lectura_es_la_mas_reciente) ... ok
@@ -17,16 +17,7 @@ Traceback (most recent call last):
     ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 AssertionError: 7 != 20
 
-======================================================================
-FAIL: test_rango_de_siete_dias (__main__.PruebasConsultas.test_rango_de_siete_dias)
 ----------------------------------------------------------------------
-Traceback (most recent call last):
-  File "C:\Users\jimen\Documents\AquaSense-Cassandra-Grupo5\tests\test_consultas.py", line 65, in test_rango_de_siete_dias
-    self.assertTrue(7 * 33 <= len(filas) <= 7 * 34)
-    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-AssertionError: False is not true
+Ran 9 tests in 0.610s
 
-----------------------------------------------------------------------
-Ran 9 tests in 0.588s
-
-FAILED (failures=2)
+FAILED (failures=1)

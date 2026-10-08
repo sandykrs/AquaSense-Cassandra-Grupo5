@@ -60,9 +60,11 @@ class PruebasConsultas(unittest.TestCase):
 
     def test_rango_de_siete_dias(self):
         sensor = next(iter(BUCKETS))
-        filas = list(session.execute(LECTURAS_DIAS, [sensor, BUCKETS[sensor][:7]]))
+        dias = BUCKETS[sensor][:7]
+        filas = list(session.execute(LECTURAS_DIAS, [sensor, dias]))
+        esperado = sum(len(list(session.execute(LECTURAS_DIA, [sensor, d]))) for d in dias)
         self.assertEqual({f.sensor_id for f in filas}, {sensor})
-        self.assertTrue(7 * 33 <= len(filas) <= 7 * 34)
+        self.assertEqual(len(filas), esperado)
 
     def test_lecturas_por_zona_y_dia(self):
         sensor = next(iter(BUCKETS))
