@@ -23,23 +23,51 @@ Para ejecutar este proyecto de forma local se requiere:
 * Cliente `cqlsh`
 ## Instalación
 1. Clonar el repositorio y entrar a la carpeta:
-   ```bash
-   git clone [https://github.com/sandykrs/AquaSense-Cassandra-Grupo5.git](https://github.com/sandykrs/AquaSense-Cassandra-Grupo5.git)
-   cd AquaSense-Cassandra-Grupo5
-## Carga de datos
-Para generar y cargar el millón de mediciones sintéticas:
-
 ```bash
-python data/generate_data.py
-python data/load_data.py
+git clone [https://github.com/sandykrs/AquaSense-Cassandra-Grupo5.git](https://github.com/sandykrs/AquaSense-Cassandra-Grupo5.git)
+cd AquaSense-Cassandra-Grupo5
 ```
+
+2. Levantar el contenedor de Cassandra:
+```bash
+docker-compose up -d
+```
+
+3. Crear el esquema de la base de datos:
+```bash
+docker exec -it aquasense cqlsh -f /database/schema/schema.cql
+```
+
+4. Generación y Carga de datos:
+```bash
+docker exec -it aquasense bash -c "python3 /data/generate_data.py && python3 /data/load_data.py"
+```
+
 ## Prueba y demostración
 Primero, crear las tablas en Cassandra:
 
 ```bash
 docker exec -it cassandra cqlsh -f database/schema/schema.cql
 ```
+1. Consultar últimas lecturas de un sensor / rango temporal:
+```bash
+docker exec -it aquasense cqlsh -f /database/queries/consultas_sensor.cql
+```
 
+2. Consultar métricas por zona y periodo:
+```bash
+docker exec -it aquasense cqlsh -f /database/queries/consultas_zona.cql
+```
+
+3. Detección de lecturas anómalas:
+```bash
+docker exec -it aquasense cqlsh -f /database/queries/consultas_anomalias.cql
+```
+
+4. Consulta de resumen agregado:
+```bash
+docker exec -it aquasense cqlsh -f /database/queries/consultas_resumen.cql
+```
 Luego, ejecutar cada consulta según el requisito del caso:
 
 | Requisito del caso | Archivo |
