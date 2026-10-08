@@ -12,9 +12,10 @@ Jeferson
 
 ---
 
-## Resumen (Abstract)
 
-**Palabras clave:** Apache Cassandra, Wide-Column, NoSQL, Telemetría, Series de Tiempo.
+**_Resumen_**—Este trabajo propone una solución al caso de Aquansence CR mediante un modelo NoSQL de columnas anchas usando Apache Cassandra, ya que esta empresa requiere un sistema para almacenar gran cantidad de lecturas sobre el agua potable proveniente de sus sensores de caudal, presión, temperatura y calidad. El modelo se creó basándose en patrones de consulta. Incluye ocho tablas desnormalizadas. Estas tablas están particionadas por sensor o por área. También están particionadas por día. Las tablas tienen ordenamiento temporal en orden descendente. Se usa compactación por intervalos de tiempo. Esto evita que las particiones sean muy grandes. Se creó un conjunto sintético. Este conjunto tiene 1 000 sensores. Los sensores están distribuidos en 20 áreas. El conjunto contiene 1 000 000 de mediciones. La creación del conjunto fue replicable., Con un 2 % de lecturas anómalas, cargado mediante escritura asíncrona usando sentencias preparadas y lotes no registrados. Las pruebas se hicieron en un clúster de un solo nodo con factor de replicación 1.
+
+**Palabras clave:** Apache Cassandra, Wide-Column, NoSQL, Telemetría, Series de Tiempo, Bases de Datos, Sensores IoT, Ingestión Masiva de Datos.
 
 ---
 ## I. Introducción y Problema
@@ -134,7 +135,7 @@ diagrama ¿?
 
 ## V. Implementación
 
-Se desarrolló un generador (data/generate_data.py) que genera datos sintéticos de forma reproducible utilizando una semilla constante, simulando 1000 sensores distribuidos en 7 áreas que corresponden a provincias de Costa Rica, con un volumen mínimo de 1 000 000 de mediciones y un porcentaje fijo del 2% de lecturas anómalas incluidas intencionalmente para validar su detección posterior. El generador también recrea un patrón de consumo diario realista, modificando el caudal según la hora del día a través de una función senoidal que imita una mayor demanda durante el día y una menor en la madrugada.
+Se desarrolló un generador (data/generate_data.py) que genera datos sintéticos de forma reproducible utilizando una semilla constante, simulando 1000 sensores distribuidos en 20 áreas que corresponden a provincias de Costa Rica, con un volumen mínimo de 1 000 000 de mediciones y un porcentaje fijo del 2% de lecturas anómalas incluidas intencionalmente para validar su detección posterior. El generador también recrea un patrón de consumo diario realista, modificando el caudal según la hora del día a través de una función senoidal que imita una mayor demanda durante el día y una menor en la madrugada.
 
 La carga de datos (data/load_data.py) se llevó a cabo a través de ingesta asíncrona mediante execute_concurrent del controlador oficial de Cassandra para Python, con un nivel de concurrencia ajustable (32 operaciones simultáneas por defecto). Las escrituras se llevan a cabo mediante sentencias preparadas (prepared statements) organizadas en lotes no registrados (UNLOGGED batches) de tamaño ajustable (50 filas por defecto), que se acumulan en un búfer antes de ser enviados al clúster (20 000 filas por defecto). Cassandra está optimizada para cargas intensivas de escritura gracias al uso secuencial del disco [2]. Para aprovecharlo, la carga combina escritura asíncrona concurrente, sentencias preparadas y lotes no registrados agrupados por partición.
 
