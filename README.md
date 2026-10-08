@@ -44,11 +44,9 @@ docker exec -it aquasense bash -c "python3 /data/generate_data.py && python3 /da
 ```
 
 ## Prueba y demostración
-Primero, crear las tablas en Cassandra:
 
-```bash
-docker exec -it cassandra cqlsh -f database/schema/schema.cql
-```
+Para ejecutar las consultas requeridas y verificar los resultados:
+
 1. Consultar últimas lecturas de un sensor / rango temporal:
 ```bash
 docker exec -it aquasense cqlsh -f /database/queries/consultas_sensor.cql
