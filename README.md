@@ -20,12 +20,27 @@ AquaSense CR es un sistema diseñado para monitorear redes de agua potable media
 Para ejecutar este proyecto de forma local se requiere:
 * **Docker Desktop** 
 * **Python 3.10+**
-* Cliente `cqlsh`
+
 ## Instalación
 1. Clonar el repositorio y entrar a la carpeta:
-   ```bash
-   git clone [https://github.com/sandykrs/AquaSense-Cassandra-Grupo5.git](https://github.com/sandykrs/AquaSense-Cassandra-Grupo5.git)
+```bash
+   git clone https://github.com/sandykrs/AquaSense-Cassandra-Grupo5.git
    cd AquaSense-Cassandra-Grupo5
+```
+2. Instalar las dependencias de Python:
+```bash
+   pip install cassandra-driver
+   pip install pyasyncore   # solo con Python 3.12 o más nuevo
+```
+3. Encender Cassandra (contenedor `aquasense`) y esperar a que `docker ps` muestre `(healthy)`, lo que puede tardar un par de minutos:
+```bash
+   docker compose up -d
+   docker ps
+```
+4. Crear las tablas (el esquema queda montado dentro del contenedor, en `/schema.cql`). Este paso borra y vuelve a crear el keyspace `aquasense`:
+```bash
+   docker exec aquasense cqlsh -f /schema.cql
+```
 ## Carga de datos
 Para generar y cargar el millón de mediciones sintéticas:
 
@@ -34,11 +49,7 @@ python data/generate_data.py
 python data/load_data.py
 ```
 ## Prueba y demostración
-Primero, crear las tablas en Cassandra:
-
-```bash
-docker exec -it cassandra cqlsh -f database/schema/schema.cql
-```
+Las tablas ya se crearon en el paso 4 de la instalación.
 
 Luego, ejecutar cada consulta según el requisito del caso:
 
