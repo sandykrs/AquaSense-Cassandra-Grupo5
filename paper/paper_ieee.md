@@ -186,7 +186,8 @@ mediante este trabajo se llegó a las siguientes conclusiones y consideraciones 
 
   Agregación Precalculada en Contraste con Consultas Ad-Hoc: Considerando que Cassandra no está orientada a realizar operaciones analíticas o grandes agregaciones en tiempo real, la creación de la tabla resumen_diario_zona mostró cómo abordar informes operativos agregados a través de precálculo, evitando la disminución del rendimiento del clúster debido al recorrido entre múltiples particiones.
 
-    Con un solo nodo y RF=1, los niveles de consistencia ajustable [3] no pueden ejercitarse: el estudio de referencia usa tres nodos con RF=3. Además, Cassandra no es adecuada para agregaciones y análisis ad hoc, y las consultas que recorren muchas particiones degradan el rendimiento [5]. Por eso el resumen diario se precalcula en resumen_diario_zona, y las consultas no previstas exigirían nuevas tablas.
+Con un solo nodo y RF=1, los niveles de consistencia ajustable [3] no pueden ejercitarse: el estudio de referencia usa tres nodos con RF=3. Además, Cassandra no es adecuada para agregaciones y análisis ad hoc, y las consultas que recorren muchas particiones degradan el rendimiento [5]. Por eso el resumen diario se precalcula en resumen_diario_zona, y las consultas no previstas exigirían nuevas tablas.
+    
     
 ## IX. Referencias
 
