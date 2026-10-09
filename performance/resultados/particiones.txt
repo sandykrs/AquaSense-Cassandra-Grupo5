@@ -1,0 +1,10 @@
+﻿		Table: lecturas_por_sensor
+		Number of partitions (estimate): 29823
+		Compacted partition minimum bytes: 1598
+		Compacted partition maximum bytes: 2299
+		Compacted partition mean bytes: 2299
+		Table: lecturas_por_zona
+		Number of partitions (estimate): 600
+		Compacted partition minimum bytes: 105779
+		Compacted partition maximum bytes: 126934
+		Compacted partition mean bytes: 126934

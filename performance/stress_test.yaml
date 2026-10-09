@@ -1,1 +1,55 @@
+# Perfil de cassandra-stress para AquaSense (tabla lecturas_por_sensor).
+# Usa un keyspace aparte: no modifica los datos de aquasense.
+# Simplificacion: "bucket" es int (numero de dia) en vez de date.
+keyspace: aquasense_stress
 
+keyspace_definition: |
+  CREATE KEYSPACE aquasense_stress
+  WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
+
+table: lecturas_por_sensor
+
+table_definition: |
+  CREATE TABLE lecturas_por_sensor (
+    sensor_id uuid,
+    bucket int,
+    fecha_hora timestamp,
+    zona text,
+    caudal double,
+    presion double,
+    temperatura double,
+    calidad text,
+    anomalia boolean,
+    PRIMARY KEY ((sensor_id, bucket), fecha_hora)
+  ) WITH CLUSTERING ORDER BY (fecha_hora DESC)
+    AND compaction = {
+      'class': 'TimeWindowCompactionStrategy',
+      'compaction_window_unit': 'DAYS',
+      'compaction_window_size': 1
+    };
+
+columnspec:
+  - name: sensor_id
+    population: uniform(1..1000)
+  - name: bucket
+    population: uniform(1..30)
+  - name: fecha_hora
+    cluster: fixed(33)
+  - name: zona
+    size: fixed(3)
+    population: uniform(1..20)
+  - name: calidad
+    size: fixed(5)
+    population: uniform(1..3)
+
+insert:
+  partitions: fixed(1)
+  batchtype: UNLOGGED
+
+queries:
+  por_sensor_dia:
+    cql: SELECT * FROM lecturas_por_sensor WHERE sensor_id = ? AND bucket = ?
+    fields: samerow
+  ultimas_10:
+    cql: SELECT * FROM lecturas_por_sensor WHERE sensor_id = ? AND bucket = ? LIMIT 10
+    fields: samerow
