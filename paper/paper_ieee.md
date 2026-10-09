@@ -131,7 +131,6 @@ La arquitectura consta de cuatro capas:
 
 Es fundamental señalar que estas características de replicación y resistencia a fallos se refieren a la configuración sugerida para un entorno de producción (RF=3 de varios nodos). El entorno de pruebas empleado en este proyecto funciona con un solo nodo y un factor de replicación de 1, una configuración idónea para el desarrollo reproducible en una única máquina, aunque no permite evidenciar experimentalmente esas capacidades de replicación, esta restricción se aborda en la Sección VIII.
 
-diagrama ¿?
 
 ## V. Implementación
 
