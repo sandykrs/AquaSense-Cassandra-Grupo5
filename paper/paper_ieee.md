@@ -158,9 +158,11 @@ MATRIZ DE VALIDACIÓN Y RENDIMIENTO DE CONSULTAS CQL
 | **5. Última lectura** | `ultima_lectura_sensor` | `(sensor_id)` | ~5 ms | Acceso instantáneo en O(1) al estado actual del sensor sin recorrer historial. |
 
 B. Rendimiento de Ingesta Masiva
+
 Para evaluar la capacidad de absorción de escrituras en telemetría continua, se ejecutó la carga masiva del conjunto de datos sintéticos (1 000 000 de mediciones generadas de forma reproducible para 1 000 sensores distribuídos en 20 zonas). La ingesta se realizó utilizando el controlador oficial de Cassandra para Python mediante escrituras asíncronas concurrentes (execute_concurrent con 32 operaciones simultáneas), sentencias preparadas (prepared statements) y lotes no registrados (UNLOGGED batches) de 50 filas agrupadas por partición. Esta configuración aprovechó la arquitectura append-only de Cassandra (escritura secuencial en CommitLog y MemTable), logrando procesar la ingesta completa con una tasa de transferencia continua superior a los 20 000 registros por segundo en el entorno de pruebas local.
 
 C. Evaluación de Particionamiento y Compactación 
+
 La implementación del particionado temporal mediante 'bucket' diario ((sensor_id, bucket) y (zona, bucket)) demostró ser efectiva para prevenir la creación de particiones gigantes. Al delimitar el alcance de cada partición a las mediciones de un solo día, el tamaño por partición se mantuvo en un rango controlado (< 10 MB), eliminando el riesgo de saturación de memoria (OutOfMemory) en los nodos del clúster.
 
 Asimismo, la configuración de la estrategia de compactación TimeWindowCompactionStrategy (TWCS) con ventanas de 1 día garantizó que las SSTables se agruparan cronológicamente, optimizando el rendimiento de lectura para las series de tiempo más recientes.
