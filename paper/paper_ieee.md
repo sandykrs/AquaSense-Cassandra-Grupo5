@@ -165,8 +165,6 @@ C. Evaluación de Particionamiento y Compactación
 
 La implementación del particionado temporal mediante 'bucket' diario ((sensor_id, bucket) y (zona, bucket)) demostró ser efectiva para prevenir la creación de particiones gigantes. Las mediciones en disco confirmaron tamaños máximos altamente controlados: un límite de 379 KB (379 022 bytes) para particiones de (zona, día) y 6.8 KB (6 866 bytes) para (sensor, día), eliminando el riesgo de saturación de memoria (OutOfMemory) o degradación en las lecturas. Asimismo, la configuración de la estrategia de compactación TimeWindowCompactionStrategy (TWCS) con ventanas de 1 día garantizó que las SSTables se agruparan cronológicamente, optimizando el rendimiento de lectura para las series de tiempo más recientes.
 
-Asimismo, la configuración de la estrategia de compactación TimeWindowCompactionStrategy (TWCS) con ventanas de 1 día garantizó que las SSTables se agruparan cronológicamente, optimizando el rendimiento de lectura para las series de tiempo más recientes.
-
 ## VII. Limitaciones 
 
 El clúster de pruebas se implementó con un solo nodo y una estrategia de replicación SimpleStrategy cuyo factor de replicación es 1. Esta configuración es apropiada para un ambiente de desarrollo reproducible en una única máquina, sin embargo, no permite evidenciar experimentalmente las capacidades de replicación y tolerancia a fallos de nodo que proporciona Cassandra en un despliegue distribuido de producción con varios nodos (para lo cual se sugiere, como trabajo futuro, el uso de NetworkTopologyStrategy con un factor de replicación de 3).
