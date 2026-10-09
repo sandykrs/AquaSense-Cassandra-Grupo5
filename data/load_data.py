@@ -1,3 +1,12 @@
+
+"""
+Carga de datos AquaSense CR a Apache Cassandra.
+Requiere generate_data.py en la misma carpeta.
+
+  python load_data.py                  # carga 1M mediciones
+  python load_data.py --benchmark      # prueba configuraciones de batch
+  python load_data.py --stress-profile # escribe perfiles cassandra-stress
+"""
 import os
 import csv
 import time
@@ -304,6 +313,170 @@ def benchmark(session, sensores, limite=LIMITE_BENCHMARK):
           f"({r['filas_por_seg']:,.0f} filas/s)")
 
 
+
+# ============================================================
+# PERFILES cassandra-stress (se escriben con: --stress-profile)
+# Van aquí dentro para mantener todo en generate_data.py + load_data.py
+# ============================================================
+
+PERFIL_STRESS_SENSOR = r"""# ============================================================================
+# Perfil cassandra-stress - AquaSense CR  |  Tabla: lecturas_por_sensor
+# Grupo 5 - XS0131 | Integrante B (Ingeniero de Datos)
+#
+# Usa un keyspace APARTE (aquasense_stress) para no mezclar los datos de
+# prueba con el 1M real del keyspace "aquasense". La tabla es idéntica a
+# lecturas_por_sensor de cql/schema.cql.
+#
+# Pasos (la fase de escritura va PRIMERO para que las lecturas encuentren datos):
+#   1) Escritura:
+#      cassandra-stress user profile=aquasense_sensor.yaml n=50000 "ops(insert=1)" -rate threads=16 -node 127.0.0.1
+#   2) Lectura:
+#      cassandra-stress user profile=aquasense_sensor.yaml duration=2m "ops(por_sensor_dia=3,ultimas_10=7)" -rate threads=16 -node 127.0.0.1
+#   3) Mixto (escritura + lectura):
+#      cassandra-stress user profile=aquasense_sensor.yaml duration=2m "ops(insert=2,por_sensor_dia=3,ultimas_10=5)" -rate threads=16 -node 127.0.0.1
+#   Para comparar concurrencia, repetir cambiando threads=8 / 16 / 32 / 64.
+# ============================================================================
+
+keyspace: aquasense_stress
+
+keyspace_definition: |
+  CREATE KEYSPACE IF NOT EXISTS aquasense_stress
+  WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
+
+table: lecturas_por_sensor
+
+table_definition: |
+  CREATE TABLE IF NOT EXISTS lecturas_por_sensor (
+    sensor_id uuid,
+    bucket date,
+    fecha_hora timestamp,
+    zona text,
+    caudal double,
+    presion double,
+    temperatura double,
+    calidad text,
+    anomalia boolean,
+    PRIMARY KEY ((sensor_id, bucket), fecha_hora)
+  ) WITH CLUSTERING ORDER BY (fecha_hora DESC)
+    AND compaction = {
+      'class': 'TimeWindowCompactionStrategy',
+      'compaction_window_unit': 'DAYS',
+      'compaction_window_size': 1
+    };
+
+# Mismo tamaño que los datos reales: 1,000 sensores x 11 días = 11,000
+# particiones, con 96 lecturas por partición (una cada 15 minutos).
+columnspec:
+  - name: sensor_id
+    population: uniform(1..1000)
+  - name: bucket
+    population: uniform(1..11)
+  - name: fecha_hora
+    cluster: fixed(96)
+  - name: zona
+    size: fixed(10)
+    population: uniform(1..20)
+  - name: calidad
+    size: fixed(6)
+
+insert:
+  partitions: fixed(1)        # una partición (sensor, día) por operación
+  select: fixed(1)/1          # se insertan todas sus filas
+  batchtype: UNLOGGED
+
+queries:
+  por_sensor_dia:             # todas las lecturas de un sensor en un día
+    cql: SELECT * FROM lecturas_por_sensor WHERE sensor_id = ? AND bucket = ? LIMIT 96
+    fields: samerow
+  ultimas_10:                 # las 10 lecturas más recientes (orden DESC)
+    cql: SELECT fecha_hora, caudal, presion, temperatura FROM lecturas_por_sensor WHERE sensor_id = ? AND bucket = ? LIMIT 10
+    fields: samerow
+"""
+
+PERFIL_STRESS_ZONA = r"""# ============================================================================
+# Perfil cassandra-stress - AquaSense CR  |  Tabla: lecturas_por_zona
+# Grupo 5 - XS0131 | Integrante B (Ingeniero de Datos)
+#
+# Misma idea que aquasense_sensor.yaml, pero para la tabla por zona, cuyas
+# particiones son MUCHO más grandes (todos los sensores de la zona en un día).
+# En los datos reales una partición (zona, día) tiene ~4,600 filas (96 lecturas x ~48 sensores activos por zona); aquí se
+# usan 96 x 48 = 4,608 filas por partición.
+#
+#   1) Escritura:
+#      cassandra-stress user profile=aquasense_zona.yaml n=5000 "ops(insert=1)" -rate threads=16 -node 127.0.0.1
+#   2) Lectura:
+#      cassandra-stress user profile=aquasense_zona.yaml duration=2m "ops(por_zona_dia=3,ultimas_100=7)" -rate threads=16 -node 127.0.0.1
+# ============================================================================
+
+keyspace: aquasense_stress
+
+keyspace_definition: |
+  CREATE KEYSPACE IF NOT EXISTS aquasense_stress
+  WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
+
+table: lecturas_por_zona
+
+table_definition: |
+  CREATE TABLE IF NOT EXISTS lecturas_por_zona (
+    zona text,
+    bucket date,
+    fecha_hora timestamp,
+    sensor_id uuid,
+    caudal double,
+    presion double,
+    temperatura double,
+    calidad text,
+    anomalia boolean,
+    PRIMARY KEY ((zona, bucket), fecha_hora, sensor_id)
+  ) WITH CLUSTERING ORDER BY (fecha_hora DESC, sensor_id ASC)
+    AND compaction = {
+      'class': 'TimeWindowCompactionStrategy',
+      'compaction_window_unit': 'DAYS',
+      'compaction_window_size': 1
+    };
+
+# 20 zonas x 11 días = 220 particiones
+columnspec:
+  - name: zona
+    size: fixed(10)
+    population: uniform(1..20)
+  - name: bucket
+    population: uniform(1..11)
+  - name: fecha_hora
+    cluster: fixed(96)
+  - name: sensor_id
+    cluster: fixed(48)
+  - name: calidad
+    size: fixed(6)
+
+insert:
+  partitions: fixed(1)
+  select: fixed(1)/1
+  batchtype: UNLOGGED
+
+queries:
+  por_zona_dia:               # lecturas de una zona en un día (limitado)
+    cql: SELECT * FROM lecturas_por_zona WHERE zona = ? AND bucket = ? LIMIT 500
+    fields: samerow
+  ultimas_100:                # las 100 lecturas más recientes de la zona
+    cql: SELECT fecha_hora, sensor_id, caudal, presion FROM lecturas_por_zona WHERE zona = ? AND bucket = ? LIMIT 100
+    fields: samerow
+"""
+
+
+def escribir_perfiles_stress(carpeta="stress"):
+    """Escribe los dos perfiles YAML de cassandra-stress en `carpeta`."""
+    base = os.path.dirname(os.path.abspath(__file__))
+    destino = os.path.join(base, carpeta)
+    os.makedirs(destino, exist_ok=True)
+    for nombre, texto in (("aquasense_sensor.yaml", PERFIL_STRESS_SENSOR),
+                          ("aquasense_zona.yaml", PERFIL_STRESS_ZONA)):
+        ruta = os.path.join(destino, nombre)
+        with open(ruta, "w", encoding="utf-8", newline="\n") as f:
+            f.write(texto)
+        print(f"Perfil escrito: {ruta}")
+
+
 # ============================================================
 # EJECUCIÓN
 # ============================================================
@@ -320,7 +493,13 @@ if __name__ == "__main__":
                         help=f"filas acumuladas antes de enviar (default: {TAMANO_BUFFER})")
     parser.add_argument("--benchmark", action="store_true",
                         help="prueba varias configuraciones y muestra el ranking")
+    parser.add_argument("--stress-profile", action="store_true",
+                        help="escribe los perfiles de cassandra-stress (stress/*.yaml) y termina")
     args = parser.parse_args()
+
+    if args.stress_profile:
+        escribir_perfiles_stress()
+        raise SystemExit(0)
 
     TAMANO_BATCH = args.batch
     CONCURRENCIA = args.concurrency
