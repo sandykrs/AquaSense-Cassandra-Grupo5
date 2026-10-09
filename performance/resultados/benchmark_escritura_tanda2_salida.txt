@@ -1,0 +1,7 @@
+﻿Corrida 1 con asyncio: vaciando tablas y cargando...
+  186.5 s | 5,361 filas/s | verificadas: 1,000,000 [OK]
+
+Resumen por motor
+  asyncio  tiempo medio 186.5 s (desv. 0.0) | velocidad media 5,361 filas/s
+
+Resultados guardados en C:\Users\jimen\Documents\AquaSense-Cassandra-Grupo5\performance\resultados\benchmark_escritura.csv

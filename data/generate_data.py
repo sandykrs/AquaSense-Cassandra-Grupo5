@@ -1,341 +1,206 @@
+
 import os
 import csv
-import time
+import math
+import random
 import argparse
-from collections import defaultdict
-from datetime import datetime, date
 from uuid import UUID
-
-from cassandra.cluster import Cluster
-from cassandra.query import BatchStatement, BatchType
-from cassandra.concurrent import execute_concurrent
-
-from generate_data import generar_sensores, generar_mediciones, NUM_MEDICIONES
+from datetime import datetime, timedelta
 
 # ============================================================
-# CONFIGURACIÓN (se puede cambiar con variables de entorno
-# o, para los 3 últimos, con --batch / --concurrency / --buffer)
+# CONFIGURACIÓN
 # ============================================================
-HOSTS = os.getenv("CASSANDRA_HOSTS", "127.0.0.1").split(",")
-PORT = int(os.getenv("CASSANDRA_PORT", "9042"))
-KEYSPACE = os.getenv("CASSANDRA_KEYSPACE", "aquasense")
+SEED = 42                      # mismo seed = mismos datos (reproducible)
+NUM_SENSORES = 1_000
+NUM_MEDICIONES = 1_000_000
+FECHA_INICIO = datetime(2026, 1, 1, 0, 0, 0)
+INTERVALO_MIN = 15             # cada sensor activo mide cada 15 minutos
+PROB_INACTIVO = 0.05           # 5% de sensores inactivos (no generan lecturas)
+PROB_ANOMALIA = 0.02           # 2% de las lecturas son anomalías
 
-TAMANO_BATCH = 50        # filas máximas por batch (misma partición)
-TAMANO_BUFFER = 20_000   # filas que se acumulan antes de agrupar y enviar
-CONCURRENCIA = 32        # operaciones en vuelo al mismo tiempo
+# zona -> (latitud, longitud) del centro de la zona (Costa Rica)
+# El caso exige 1,000 sensores en 20 zonas -> 50 sensores por zona.
+ZONAS = {
+    "sanjose":      (9.9281, -84.0907),
+    "escazu":       (9.9189, -84.1400),
+    "desamparados": (9.8970, -84.0680),
+    "alajuela":     (10.0162, -84.2116),
+    "san_ramon":    (10.0872, -84.4697),
+    "grecia":       (10.0728, -84.3116),
+    "cartago":      (9.8644, -83.9194),
+    "paraiso":      (9.8388, -83.8655),
+    "turrialba":    (9.9048, -83.6841),
+    "heredia":      (9.9981, -84.1198),
+    "santodomingo": (9.9783, -84.0922),
+    "liberia":      (10.6346, -85.4407),
+    "nicoya":       (10.1483, -85.4519),
+    "santacruz":    (10.2606, -85.5848),
+    "puntarenas":   (9.9763, -84.8384),
+    "esparza":      (9.9936, -84.6633),
+    "quepos":       (9.4316, -84.1620),
+    "limon":        (9.9907, -83.0360),
+    "siquirres":    (10.1000, -83.5167),
+    "guapiles":     (10.2167, -83.7833),
+}
+assert len(ZONAS) == 20
 
-# El generador usa 0/1/2; el schema usa texto
-CALIDAD = {0: "buena", 1: "regular", 2: "mala"}
+TIPOS_SENSOR = ["multiparametro", "ultrasonico", "electromagnetico"]
 
-# Configuraciones que prueba --benchmark: (batch, concurrencia, buffer)
-CONFIGS_BENCHMARK = [
-    (1,   32, 20_000),    # base: casi sin agrupar
-    (10,  32, 20_000),
-    (25,  32, 20_000),
-    (50,  32, 20_000),    # configuración por defecto
-    (100, 32, 20_000),
-    (50,  32, 50_000),    # buffer más grande
-    (50,  32, 100_000),
-    (50,  16, 20_000),    # menos concurrencia
-    (50,  64, 20_000),    # más concurrencia
-    (50, 128, 20_000),
+# Tipos de anomalía (se guardan en el campo "motivo" de las tablas anomalias_*)
+TIPOS_ANOMALIA = [
+    "fuga",               # caudal alto + presión baja
+    "presion_baja",
+    "presion_alta",
+    "temperatura_alta",
+    "caudal_anomalo",
+    "calidad_mala",
 ]
-LIMITE_BENCHMARK = 100_000
+
+# Calidad: 0 = buena, 1 = regular, 2 = mala (load_data.py lo traduce a texto)
 
 
 # ============================================================
-# FUNCIONES
+# SENSORES
 # ============================================================
 
-def conectar():
-    cluster = Cluster(HOSTS, port=PORT)
-    session = cluster.connect(KEYSPACE)
-    return cluster, session
-
-
-def enviar_batches(session, stmt, filas, tamano_batch=None):
+def generar_sensores(cantidad=NUM_SENSORES):
     """
-    filas: lista de (clave_particion, parametros).
-    Agrupa por partición y envía batches UNLOGGED en paralelo.
-    Retorna la cantidad de batches enviados.
+    Retorna una lista de diccionarios, uno por sensor:
+      sensor_id, zone_id, sensor_type, status ('activo'/'inactivo'),
+      latitude, longitude, base_flow, base_pressure, base_temperature
+    Los campos base_* son la "línea base" de cada sensor y NO se guardan
+    en Cassandra; solo los usa generar_mediciones().
     """
-    tamano_batch = tamano_batch or TAMANO_BATCH
+    rng = random.Random(SEED)
+    zonas = list(ZONAS.keys())
+    sensores = []
 
-    grupos = defaultdict(list)
-    for clave, params in filas:
-        grupos[clave].append(params)
-
-    batches = []
-    for lista in grupos.values():
-        for i in range(0, len(lista), tamano_batch):
-            batch = BatchStatement(batch_type=BatchType.UNLOGGED)
-            for params in lista[i:i + tamano_batch]:
-                batch.add(stmt, params)
-            batches.append((batch, None))
-
-    execute_concurrent(session, batches, concurrency=CONCURRENCIA,
-                       raise_on_first_error=True)
-    return len(batches)
-
-
-def enviar_individuales(session, stmt, lista_params):
-    """Para tablas donde cada fila es su propia partición (sin batch)."""
-    execute_concurrent(session, [(stmt, p) for p in lista_params],
-                       concurrency=CONCURRENCIA, raise_on_first_error=True)
+    for i in range(cantidad):
+        zona = zonas[i % len(zonas)]
+        lat0, lon0 = ZONAS[zona]
+        sensores.append({
+            "sensor_id": str(UUID(int=rng.getrandbits(128), version=4)),
+            "zone_id": zona,
+            "sensor_type": rng.choice(TIPOS_SENSOR),
+            "status": "inactivo" if rng.random() < PROB_INACTIVO else "activo",
+            "latitude": round(lat0 + rng.uniform(-0.05, 0.05), 6),
+            "longitude": round(lon0 + rng.uniform(-0.05, 0.05), 6),
+            "base_flow": rng.uniform(20.0, 120.0),         # L/s
+            "base_pressure": rng.uniform(40.0, 80.0),      # PSI
+            "base_temperature": rng.uniform(18.0, 26.0),   # °C
+        })
+    return sensores
 
 
-def cargar_sensores(session, sensores):
-    stmt_sensor = session.prepare("""
-        INSERT INTO sensores (sensor_id, zona, tipo, activo, latitud, longitud)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """)
-    stmt_por_zona = session.prepare("""
-        INSERT INTO sensores_por_zona (zona, sensor_id, tipo, activo)
-        VALUES (?, ?, ?, ?)
-    """)
+# ============================================================
+# MEDICIONES
+# ============================================================
 
-    individuales = []
-    por_zona = []
-    for s in sensores:
-        sid = UUID(s["sensor_id"])
-        activo = s["status"] == "activo"
-        individuales.append((sid, s["zone_id"], s["sensor_type"], activo,
-                             s["latitude"], s["longitude"]))
-        por_zona.append((s["zone_id"], (s["zone_id"], sid, s["sensor_type"], activo)))
+def _aplicar_anomalia(rng, tipo, caudal, presion, temp):
+    """Modifica los valores según el tipo de anomalía. Retorna (caudal, presion, temp, calidad)."""
+    calidad = rng.choice([1, 2])
+    if tipo == "fuga":
+        caudal *= rng.uniform(1.6, 2.5)
+        presion *= rng.uniform(0.4, 0.7)
+    elif tipo == "presion_baja":
+        presion *= rng.uniform(0.3, 0.6)
+    elif tipo == "presion_alta":
+        presion *= rng.uniform(1.5, 2.0)
+    elif tipo == "temperatura_alta":
+        temp += rng.uniform(8.0, 15.0)
+    elif tipo == "caudal_anomalo":
+        caudal *= rng.choice([rng.uniform(0.0, 0.3), rng.uniform(2.0, 3.0)])
+    elif tipo == "calidad_mala":
+        calidad = 2
+    return caudal, presion, temp, calidad
 
-    enviar_individuales(session, stmt_sensor, individuales)
-    enviar_batches(session, stmt_por_zona, por_zona)
-    print(f"Sensores cargados: {len(sensores)}")
+
+def generar_mediciones(sensores, total=NUM_MEDICIONES):
+    """
+    Generador (yield) de mediciones en ORDEN DE TIEMPO.
+    Cada ronda, todos los sensores activos miden una vez; se repite
+    hasta completar `total` mediciones.
+
+    Cada medición es un diccionario con:
+      sensor_id, zone_id, day (YYYY-MM-DD), event_ts (YYYY-MM-DD HH:MM:SS),
+      flow, pressure, temperature, quality (0/1/2),
+      is_anomaly (bool), anomaly_type (str o None)
+    """
+    rng = random.Random(SEED + 1)
+    activos = [s for s in sensores if s["status"] == "activo"]
+    if not activos:
+        return
+
+    # Desfase fijo (segundos) por sensor, para que no midan todos al mismo instante
+    desfase = {s["sensor_id"]: rng.randint(0, 59) for s in activos}
+
+    generadas = 0
+    ronda = 0
+    while generadas < total:
+        base_ts = FECHA_INICIO + timedelta(minutes=INTERVALO_MIN * ronda)
+        # Ciclo diario: más consumo de día que de madrugada
+        hora = base_ts.hour + base_ts.minute / 60
+        factor_dia = 1.0 + 0.3 * math.sin((hora - 6) / 24 * 2 * math.pi)
+
+        for s in activos:
+            if generadas >= total:
+                return
+            ts = base_ts + timedelta(seconds=desfase[s["sensor_id"]])
+
+            caudal = s["base_flow"] * factor_dia * rng.gauss(1.0, 0.05)
+            presion = s["base_pressure"] * rng.gauss(1.0, 0.03)
+            temp = s["base_temperature"] + rng.gauss(0.0, 0.8)
+            calidad = 0 if rng.random() < 0.92 else 1
+
+            es_anomalia = rng.random() < PROB_ANOMALIA
+            tipo = None
+            if es_anomalia:
+                tipo = rng.choice(TIPOS_ANOMALIA)
+                caudal, presion, temp, calidad = _aplicar_anomalia(
+                    rng, tipo, caudal, presion, temp)
+
+            yield {
+                "sensor_id": s["sensor_id"],
+                "zone_id": s["zone_id"],
+                "day": ts.strftime("%Y-%m-%d"),
+                "event_ts": ts.strftime("%Y-%m-%d %H:%M:%S"),
+                "flow": round(max(caudal, 0.0), 2),
+                "pressure": round(max(presion, 0.0), 2),
+                "temperature": round(temp, 2),
+                "quality": calidad,
+                "is_anomaly": es_anomalia,
+                "anomaly_type": tipo,
+            }
+            generadas += 1
+        ronda += 1
 
 
-def registrar_resultado(filas, anomalias, batches, duracion):
-    """Agrega una línea a data/resultados_carga.csv para el benchmark."""
+# ============================================================
+# MUESTRA CSV (Día 4 del calendario: "Muestra 100 filas CSV")
+# ============================================================
+
+def guardar_muestra(filas=100):
+    sensores = generar_sensores()
     carpeta = os.path.dirname(os.path.abspath(__file__))
-    ruta = os.path.join(carpeta, "resultados_carga.csv")
-    encabezado = ["fecha", "filas", "anomalias", "batches", "tamano_batch",
-                  "tamano_buffer", "concurrencia", "segundos", "filas_por_seg"]
+    ruta = os.path.join(carpeta, f"muestra_{filas}.csv")
 
-    # Si el CSV es de la versión anterior (sin tamano_buffer), se guarda aparte
-    if os.path.exists(ruta):
-        with open(ruta, encoding="utf-8") as f:
-            primera = f.readline()
-        if "tamano_buffer" not in primera:
-            os.replace(ruta, os.path.join(carpeta, "resultados_carga_dia6.csv"))
+    campos = ["sensor_id", "zone_id", "day", "event_ts", "flow", "pressure",
+              "temperature", "quality", "is_anomaly", "anomaly_type"]
+    with open(ruta, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=campos)
+        w.writeheader()
+        for m in generar_mediciones(sensores, total=filas):
+            w.writerow(m)
+    return ruta
 
-    nuevo = not os.path.exists(ruta)
-    with open(ruta, "a", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        if nuevo:
-            w.writerow(encabezado)
-        w.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), filas,
-                    anomalias, batches, TAMANO_BATCH, TAMANO_BUFFER,
-                    CONCURRENCIA, round(duracion, 1), round(filas / duracion)])
-
-
-def cargar_mediciones(session, sensores, limite, verbose=True, registrar=True):
-    """
-    Carga las mediciones en Cassandra. Retorna un diccionario con el resultado.
-    verbose=False silencia los prints (lo usa --benchmark).
-    registrar=False no escribe en resultados_carga.csv.
-    """
-    stmt_lec_sensor = session.prepare("""
-        INSERT INTO lecturas_por_sensor
-        (sensor_id, bucket, fecha_hora, zona, caudal, presion,
-         temperatura, calidad, anomalia)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """)
-    stmt_lec_zona = session.prepare("""
-        INSERT INTO lecturas_por_zona
-        (zona, bucket, fecha_hora, sensor_id, caudal, presion,
-         temperatura, calidad, anomalia)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """)
-    stmt_anom_sensor = session.prepare("""
-        INSERT INTO anomalias_por_sensor
-        (sensor_id, bucket, fecha_hora, zona, caudal, presion,
-         temperatura, calidad, motivo)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """)
-    stmt_anom_zona = session.prepare("""
-        INSERT INTO anomalias_por_zona
-        (zona, bucket, fecha_hora, sensor_id, motivo, caudal, presion,
-         temperatura, calidad)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """)
-    stmt_resumen = session.prepare("""
-        INSERT INTO resumen_diario_zona
-        (zona, dia, total_sensores, total_lecturas, promedio_caudal,
-         promedio_presion, promedio_temperatura, total_anomalias)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """)
-    stmt_ultima = session.prepare("""
-        INSERT INTO ultima_lectura_sensor
-        (sensor_id, zona, fecha_hora, caudal, presion, temperatura,
-         calidad, anomalia)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """)
-
-    lec_sensor, lec_zona, anom_sensor, anom_zona = [], [], [], []
-    resumen = {}   # (zona, dia) -> [n, sum_caudal, sum_presion, sum_temp, anomalias, sensores]
-    ultima = {}    # sensor_id -> params de la última lectura
-    total = 0
-    total_anomalias = 0
-    total_batches = 0
-    inicio = time.time()
-
-    def vaciar():
-        nonlocal lec_sensor, lec_zona, anom_sensor, anom_zona, total_batches
-        total_batches += enviar_batches(session, stmt_lec_sensor, lec_sensor)
-        total_batches += enviar_batches(session, stmt_lec_zona, lec_zona)
-        total_batches += enviar_batches(session, stmt_anom_sensor, anom_sensor)
-        total_batches += enviar_batches(session, stmt_anom_zona, anom_zona)
-        lec_sensor, lec_zona, anom_sensor, anom_zona = [], [], [], []
-
-    for m in generar_mediciones(sensores):
-        if total >= limite:
-            break
-
-        sid = UUID(m["sensor_id"])
-        zona = m["zone_id"]
-        bucket = date.fromisoformat(m["day"])
-        ts = datetime.strptime(m["event_ts"], "%Y-%m-%d %H:%M:%S")
-        calidad = CALIDAD[m["quality"]]
-        caudal, presion, temp = m["flow"], m["pressure"], m["temperature"]
-        anomalia = m["is_anomaly"]
-
-        lec_sensor.append(((m["sensor_id"], m["day"]), (
-            sid, bucket, ts, zona, caudal, presion, temp, calidad, anomalia)))
-        lec_zona.append(((zona, m["day"]), (
-            zona, bucket, ts, sid, caudal, presion, temp, calidad, anomalia)))
-
-        if anomalia:
-            total_anomalias += 1
-            anom_sensor.append(((m["sensor_id"], m["day"]), (
-                sid, bucket, ts, zona, caudal, presion, temp, calidad,
-                m["anomaly_type"])))
-            anom_zona.append(((zona, m["day"]), (
-                zona, bucket, ts, sid, m["anomaly_type"],
-                caudal, presion, temp, calidad)))
-
-        # Acumuladores para resumen_diario_zona
-        r = resumen.setdefault((zona, bucket), [0, 0.0, 0.0, 0.0, 0, set()])
-        r[0] += 1
-        r[1] += caudal
-        r[2] += presion
-        r[3] += temp
-        r[4] += 1 if anomalia else 0
-        r[5].add(sid)
-
-        # Última lectura por sensor (el generador va en orden de tiempo)
-        ultima[sid] = (sid, zona, ts, caudal, presion, temp, calidad, anomalia)
-
-        total += 1
-        if len(lec_sensor) >= TAMANO_BUFFER:
-            vaciar()
-            if verbose:
-                seg = time.time() - inicio
-                print(f"  {total:,} filas | {total / seg:,.0f} filas/s")
-
-    if lec_sensor:
-        vaciar()
-
-    # Tablas resumen (se escriben al final, ya con los totales)
-    filas_resumen = [
-        (zona, (zona, dia, len(r[5]), r[0], r[1] / r[0], r[2] / r[0],
-                r[3] / r[0], r[4]))
-        for (zona, dia), r in resumen.items()
-    ]
-    total_batches += enviar_batches(session, stmt_resumen, filas_resumen)
-    enviar_individuales(session, stmt_ultima, list(ultima.values()))
-
-    duracion = time.time() - inicio
-    velocidad = total / duracion
-
-    if verbose:
-        print("-" * 50)
-        print(f"Mediciones cargadas: {total:,}")
-        print(f"Anomalías cargadas:  {total_anomalias:,}")
-        print(f"Batches enviados:    {total_batches:,}")
-        print(f"Tiempo:              {duracion:.1f} s")
-        print(f"Velocidad:           {velocidad:,.0f} filas/s")
-
-    if registrar:
-        registrar_resultado(total, total_anomalias, total_batches, duracion)
-
-    return {"filas": total, "anomalias": total_anomalias,
-            "batches": total_batches, "duracion": duracion,
-            "filas_por_seg": velocidad}
-
-
-def benchmark(session, sensores, limite=LIMITE_BENCHMARK):
-    """
-    Prueba varias combinaciones de batch / concurrencia / buffer y muestra
-    un ranking. Cada corrida queda registrada en resultados_carga.csv.
-    """
-    global TAMANO_BATCH, TAMANO_BUFFER, CONCURRENCIA
-    original = (TAMANO_BATCH, TAMANO_BUFFER, CONCURRENCIA)
-    resultados = []
-
-    try:
-        print("Calentamiento (no cuenta en el ranking)...")
-        TAMANO_BATCH, TAMANO_BUFFER, CONCURRENCIA = 50, 20_000, 32
-        cargar_mediciones(session, sensores, 20_000, verbose=False, registrar=False)
-
-        for i, (b, c, buf) in enumerate(CONFIGS_BENCHMARK, 1):
-            TAMANO_BATCH, CONCURRENCIA, TAMANO_BUFFER = b, c, buf
-            print(f"Prueba {i}/{len(CONFIGS_BENCHMARK)}: batch={b} "
-                  f"concurrencia={c} buffer={buf:,} ...")
-            r = cargar_mediciones(session, sensores, limite, verbose=False)
-            resultados.append((b, c, buf, r))
-    finally:
-        TAMANO_BATCH, TAMANO_BUFFER, CONCURRENCIA = original
-
-    resultados.sort(key=lambda x: x[3]["filas_por_seg"], reverse=True)
-
-    print("\n" + "=" * 62)
-    print(f"{'batch':>6} {'concurr.':>9} {'buffer':>9} {'batches':>9} {'seg':>7} {'filas/s':>9}")
-    print("=" * 62)
-    for b, c, buf, r in resultados:
-        print(f"{b:>6} {c:>9} {buf:>9,} {r['batches']:>9,} "
-              f"{r['duracion']:>7.1f} {r['filas_por_seg']:>9,.0f}")
-    print("=" * 62)
-    b, c, buf, r = resultados[0]
-    print(f"Mejor: batch={b} concurrencia={c} buffer={buf:,} "
-          f"({r['filas_por_seg']:,.0f} filas/s)")
-
-
-# ============================================================
-# EJECUCIÓN
-# ============================================================
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Carga de datos AquaSense CR")
-    parser.add_argument("--limit", type=int, default=NUM_MEDICIONES,
-                        help="cantidad de mediciones a cargar (default: 1,000,000)")
-    parser.add_argument("--batch", type=int, default=TAMANO_BATCH,
-                        help=f"filas por batch (default: {TAMANO_BATCH})")
-    parser.add_argument("--concurrency", type=int, default=CONCURRENCIA,
-                        help=f"operaciones en paralelo (default: {CONCURRENCIA})")
-    parser.add_argument("--buffer", type=int, default=TAMANO_BUFFER,
-                        help=f"filas acumuladas antes de enviar (default: {TAMANO_BUFFER})")
-    parser.add_argument("--benchmark", action="store_true",
-                        help="prueba varias configuraciones y muestra el ranking")
+    parser = argparse.ArgumentParser(description="Generador de datos AquaSense CR")
+    parser.add_argument("--filas", type=int, default=100,
+                        help="filas de la muestra CSV (default: 100)")
     args = parser.parse_args()
 
-    TAMANO_BATCH = args.batch
-    CONCURRENCIA = args.concurrency
-    TAMANO_BUFFER = args.buffer
-
-    cluster, session = conectar()
-    try:
-        sensores = generar_sensores()
-        cargar_sensores(session, sensores)
-
-        if args.benchmark:
-            benchmark(session, sensores)
-        else:
-            print(f"Config: batch={TAMANO_BATCH} | concurrencia={CONCURRENCIA} | "
-                  f"buffer={TAMANO_BUFFER:,} | filas={args.limit:,}")
-            cargar_mediciones(session, sensores, args.limit)
-    finally:
-        cluster.shutdown()
+    sensores = generar_sensores()
+    activos = sum(1 for s in sensores if s["status"] == "activo")
+    print(f"Sensores: {len(sensores)} ({activos} activos) en {len(ZONAS)} zonas")
+    print(f"Muestra guardada en: {guardar_muestra(args.filas)}")

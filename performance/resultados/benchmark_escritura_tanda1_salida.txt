@@ -1,0 +1,41 @@
+﻿Corrida 1 con asyncio: vaciando tablas y cargando...
+  287.6 s | 3,477 filas/s | verificadas: 1,000,000 [OK]
+Corrida 1 con asyncore: vaciando tablas y cargando...
+  194.5 s | 5,140 filas/s | verificadas: 1,000,000 [OK]
+Corrida 2 con asyncio: vaciando tablas y cargando...
+  237.0 s | 4,220 filas/s | verificadas: 1,000,000 [OK]
+Corrida 2 con asyncore: vaciando tablas y cargando...
+  183.2 s | 5,457 filas/s | verificadas: 1,000,000 [OK]
+Corrida 3 con asyncio: vaciando tablas y cargando...
+Sensores cargados: 1000
+  20,000 filas | 4,306 filas/s
+  40,000 filas | 4,538 filas/s
+  60,000 filas | 5,089 filas/s
+  80,000 filas | 4,984 filas/s
+  100,000 filas | 4,689 filas/s
+  120,000 filas | 4,610 filas/s
+  140,000 filas | 4,466 filas/s
+  160,000 filas | 4,554 filas/s
+  180,000 filas | 4,590 filas/s
+
+e "data/load_data.py", line 243, in <module>
+    cargar_mediciones(session, sensores, args.limit)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "data/load_data.py", line 202, in cargar_mediciones
+    vaciar()
+    ~~~~~~^^
+  File "data/load_data.py", line 157, in vaciar
+    total_batches += enviar_batches(session, stmt_lec_zona, lec_zona)
+                     ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "data/load_data.py", line 58, in enviar_batches
+    execute_concurrent(session, batches, concurrency=CONCURRENCIA,
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                       raise_on_first_error=True)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "cassandra/concurrent.py", line 44, in cassandra.concurrent.execute_concurrent
+  File "cassandra/concurrent.py", line 140, in cassandra.concurrent.ConcurrentExecutorListResults.execute
+  File "cassandra/concurrent.py", line 71, in cassandra.concurrent._ConcurrentExecutor.execute
+  File "cassandra/concurrent.py", line 154, in cassandra.concurrent.ConcurrentExecutorListResults._results
+  File "cassandra/concurrent.py", line 158, in cassandra.concurrent.ConcurrentExecutorListResults._results
+cassandra.WriteTimeout: Error from server: code=1100 [Coordinator node timed out waiting for replica nodes' responses] message="Operation timed out - received only 0 responses." info={'consistency': 'LOCAL_ONE', 'required_responses': 1, 'received_responses': 0, 'write_type': 'SIMPLE'}
+
