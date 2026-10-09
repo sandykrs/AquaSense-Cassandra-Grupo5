@@ -228,4 +228,67 @@ Hallazgos:
 - El generador de main reparte los sensores en 7 zonas; el caso exige 20. La prueba `test_cantidad_de_sensores_y_zonas` falla por esto.
 - La tabla por zona concentra 84 particiones de hasta unos 921 KB, y su consulta tarda unos 200 ms: cumple el requisito de no escanear la base, pero es el punto débil del diseño (riesgo de hotspot de escritura en un clúster real).
 - El README indica el contenedor `cassandra` y el comando `cqlsh -f database/schema/schema.cql`, que no funcionan con el compose (contenedor `aquasense`, esquema montado en `/schema.cql`).
+## 10. Mediciones con el generador de 20 zonas (main, PR #70)
 
+El PR #70 (Jeferson) cambió el generador a 20 zonas, con 50 sensores por zona. Se recargó el millón desde cero en el docker-compose (heap de 1 GB) y se repitieron las pruebas.
+
+### 10.1 Zonas
+
+| Concepto | Valor |
+|---|---|
+| Zonas distintas en `sensores_por_zona` | 20 (evidencia: `zonas_generador_20.txt`) |
+| Anomalías | 19 970 de 1 000 000 (2.00 %) |
+| Particiones sensor-día | 10 494 (exacto, `verificar_carga.py`) |
+| Filas por partición sensor-día | mín 88, media 95.3, máx 96 |
+
+### 10.2 Carga masiva (compose)
+
+| Medida | Valor |
+|---|---|
+| Filas cargadas | 1 000 000 (verificadas) |
+| Tiempo | 127.8 s |
+| Velocidad | 7 824 filas/s |
+| Batches | 95 866 |
+| Configuración | batch=50, concurrencia=32, buffer=20 000 |
+
+### 10.3 Pruebas
+
+| Prueba | Resultado |
+|---|---|
+| `test_consultas.py` | 9/9 OK (`test_cantidad_de_sensores_y_zonas` ya pasa) |
+| `test_concurrencia.py` | 3/3 OK (19.4 s) |
+
+### 10.4 Latencia de lectura (p50 / p95, ms, asyncio, 30 rep + 5 calentamiento)
+
+| Consulta | Filas | Corrida 1* | Corrida 2 | Corrida 3 |
+|---|---|---|---|---|
+| Última lectura de sensor | 1 | 6.20 / 17.50 | 2.80 / 3.35 | 2.37 / 2.66 |
+| Últimas 10 lecturas | 10 | 9.19 / 23.14 | 3.08 / 3.92 | 2.58 / 3.37 |
+| Sensor y 1 día | 96 | 11.94 / 16.96 | 4.97 / 5.96 | 4.55 / 5.59 |
+| Sensor y 7 días | 664 | 48.86 / 91.92 | 19.07 / 28.01 | 13.24 / 16.64 |
+| Zona y 1 día | 4 579 | 133.43 / 294.36 | 47.04 / 93.25 | 38.38 / 67.62 |
+| Anomalías de sensor | 2.2 | 5.62 / 7.59 | 2.87 / 4.36 | 3.04 / 4.34 |
+| Anomalías de zona | 90.6 | 9.60 / 12.58 | 3.58 / 4.96 | 3.25 / 3.77 |
+| Resumen zona (7 días) | 7 | 5.66 / 8.71 | 2.87 / 3.70 | 2.32 / 2.70 |
+
+\* La corrida 1 se hizo justo después de la carga y de una caída de conexión (`CRC mismatch`) con el equipo ocupado. Se conserva como evidencia, pero no se usa como valor representativo. Las corridas 2 y 3 son las válidas; el rango de la consulta por zona y día es 38 a 47 ms (p50) y 68 a 93 ms (p95).
+
+### 10.5 Particiones
+
+| Tabla | Particiones | Tamaño máx. de partición | Celdas máx. | Espacio en disco |
+|---|---|---|---|---|
+| `lecturas_por_zona` | 220 (20 zonas × 11 días) | 379 022 bytes (~370 KB) | 24 601 | 29 643 756 bytes |
+| `lecturas_por_sensor` | 10 494 (`tablestats` estima 10 354) | 6 866 bytes (~6.7 KB) | 642 | 25 120 682 bytes |
+
+Ambas quedan muy por debajo de la referencia de 100 MB por partición.
+
+### 10.6 Comparación 7 zonas vs 20 zonas (generador de main)
+
+| Medida | 7 zonas | 20 zonas |
+|---|---|---|
+| Filas devueltas por zona y día | 13 091 | 4 579 |
+| Zona y 1 día, p50 / p95 | 201.5 / 316.4 ms | 38.4 a 47.0 / 67.6 a 93.3 ms |
+| Partición zona-día máxima | 943 127 bytes | 379 022 bytes |
+| Particiones zona-día | 84 | 220 |
+| Carga del millón | 126.0 s (7 938 filas/s) | 127.8 s (7 824 filas/s) |
+| Prueba de zonas | falla (7 != 20) | pasa |
