@@ -1,5 +1,4 @@
 
-
 import os
 import csv
 import math
@@ -20,15 +19,30 @@ PROB_INACTIVO = 0.05           # 5% de sensores inactivos (no generan lecturas)
 PROB_ANOMALIA = 0.02           # 2% de las lecturas son anomalías
 
 # zona -> (latitud, longitud) del centro de la zona (Costa Rica)
+# El caso exige 1,000 sensores en 20 zonas -> 50 sensores por zona.
 ZONAS = {
-    "sanjose":    (9.9281, -84.0907),
-    "alajuela":   (10.0162, -84.2116),
-    "cartago":    (9.8644, -83.9194),
-    "heredia":    (9.9981, -84.1198),
-    "guanacaste": (10.6346, -85.4407),
-    "puntarenas": (9.9763, -84.8384),
-    "limon":      (9.9907, -83.0360),
+    "sanjose":      (9.9281, -84.0907),
+    "escazu":       (9.9189, -84.1400),
+    "desamparados": (9.8970, -84.0680),
+    "alajuela":     (10.0162, -84.2116),
+    "san_ramon":    (10.0872, -84.4697),
+    "grecia":       (10.0728, -84.3116),
+    "cartago":      (9.8644, -83.9194),
+    "paraiso":      (9.8388, -83.8655),
+    "turrialba":    (9.9048, -83.6841),
+    "heredia":      (9.9981, -84.1198),
+    "santodomingo": (9.9783, -84.0922),
+    "liberia":      (10.6346, -85.4407),
+    "nicoya":       (10.1483, -85.4519),
+    "santacruz":    (10.2606, -85.5848),
+    "puntarenas":   (9.9763, -84.8384),
+    "esparza":      (9.9936, -84.6633),
+    "quepos":       (9.4316, -84.1620),
+    "limon":        (9.9907, -83.0360),
+    "siquirres":    (10.1000, -83.5167),
+    "guapiles":     (10.2167, -83.7833),
 }
+assert len(ZONAS) == 20
 
 TIPOS_SENSOR = ["multiparametro", "ultrasonico", "electromagnetico"]
 
@@ -42,7 +56,7 @@ TIPOS_ANOMALIA = [
     "calidad_mala",
 ]
 
-# Calidad: 0 = buena, 1 = regular, 2 = mala (cargar_datos.py lo traduce a texto)
+# Calidad: 0 = buena, 1 = regular, 2 = mala (load_data.py lo traduce a texto)
 
 
 # ============================================================
@@ -167,8 +181,7 @@ def generar_mediciones(sensores, total=NUM_MEDICIONES):
 
 def guardar_muestra(filas=100):
     sensores = generar_sensores()
-    carpeta = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-    os.makedirs(carpeta, exist_ok=True)
+    carpeta = os.path.dirname(os.path.abspath(__file__))
     ruta = os.path.join(carpeta, f"muestra_{filas}.csv")
 
     campos = ["sensor_id", "zone_id", "day", "event_ts", "flow", "pressure",
