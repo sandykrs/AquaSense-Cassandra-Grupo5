@@ -144,49 +144,71 @@ Las lecturas anómalas se producen a través de una probabilidad constante del 2
 
 ## VI. Pruebas y Resultados
 
-A. Validación Funcional del Esquema y Patrones de Consulta
-Se revisó cómo funcionan las 8 tablas desnormalizadas que forman el keyspace aquasense en Apache Cassandra 5.0.9. El estudio mostró que la estrategia de diseño basado en consultas, llamada Query-Driven Design, satisface todas las necesidades operativas de AquaSense CR. Esto se hace filtrando por la clave de partición, también conocida como Partition Key. Así, ninguna consulta necesita usar ALLOW FILTERING ni hacer escaneos completos de la tabla, llamados full table scans.
+ A.Validación funcional. 
 
-TABLA III
-MATRIZ DE VALIDACIÓN Y RENDIMIENTO DE CONSULTAS CQL
-| Requisito del Caso | Archivo / Tabla | Clave de Partición | Latencia Aprox. | Resultado / Comportamiento |
-| :--- | :--- | :--- | :---: | :--- |
-| **1. Lecturas recientes** | `consultas_sensor.cql`<br>`lecturas_por_sensor` | `(sensor_id, bucket)` | ~12 ms | Recuperación de las últimas 10 lecturas en O(1) gracias al clustering `fecha_hora DESC`. |
-| **2. Rango por zona** | `consultas_zona.cql`<br>`lecturas_por_zona` | `(zona, bucket)` | ~25 ms | Filtrado por zona y periodo temporal sin *full table scan*. |
-| **3. Detección de anomalías** | `consultas_anomalias.cql`<br>`anomalias_por_zona` | `(zona, bucket)` | ~15 ms | Búsqueda directa sobre tabla dedicada con atributo `motivo`. |
-| **4. Resumen operativo** | `consultas_resumen.cql`<br>`resumen_diario_zona` | `(zona)` | ~8 ms | Consulta de métricas precalculadas evitando agregaciones al vuelo. |
-| **5. Última lectura** | `ultima_lectura_sensor` | `(sensor_id)` | ~5 ms | Acceso instantáneo en O(1) al estado actual del sensor sin recorrer historial. |
+Se validó el esquema de las 8 tablas con inserciones y consultas de verificación (docs/validacion-schema.md). Además, se ejecutaron 9 pruebas de consultas (tests/test_consultas.py), que incluyen la cantidad de sensores y zonas y el rechazo de consultas sin clave de partición, y 3 pruebas de concurrencia (tests/test_concurrencia.py) en un keyspace aparte. Pasaron las 12. Todas las consultas se resuelven con la clave de partición completa, sin ALLOW FILTERING ni recorridos completos de tabla.
 
-B. Rendimiento de Ingesta Masiva
+B. Entorno
 
-Para evaluar la capacidad de absorción de escrituras en telemetría continua, se ejecutó la carga masiva del conjunto de datos sintéticos (1 000 000 de mediciones generadas de forma reproducible para 1 000 sensores distribuídos en 20 zonas). La ingesta se realizó utilizando el controlador oficial de Cassandra para Python mediante escrituras asíncronas concurrentes (execute_concurrent con 32 operaciones simultáneas), sentencias preparadas (prepared statements) y lotes no registrados (UNLOGGED batches) de 50 filas agrupadas por partición. Esta configuración aprovechó la arquitectura append-only de Cassandra, logrando procesar el millón de registros en 127.8 segundos, lo que representa una tasa de transferencia promedio de 7 824 filas/s (con un rango entre 6 000 y 8 000 filas/s según el estado de carga de la máquina).
+Windows 11 Home, Intel Core i7-1065G7 (4 núcleos, 8 hilos), 7 959 MB de RAM; Docker con 8 CPUs y 3.711 GiB; contenedor aquasense con Cassandra 5.0.9, heap máximo de 1 024 MB, SimpleStrategy y RF=1. El cliente Python y Cassandra corrieron en la misma máquina. Las latencias se midieron desde Python con sentencias preparadas, 5 repeticiones de calentamiento y 30 medidas por consulta, en tres corridas.
+C. Ingesta masiva 
 
-C. Evaluación de Particionamiento y Compactación 
+Se cargaron 1 000 000 de mediciones de 1 000 sensores en 20 zonas con escritura asíncrona (execute_concurrent, 32 operaciones simultáneas), sentencias preparadas y lotes no registrados de 50 filas agrupados por partición, aprovechando que Cassandra está optimizada para escritura intensiva [2].
 
-La implementación del particionado temporal mediante 'bucket' diario ((sensor_id, bucket) y (zona, bucket)) demostró ser efectiva para prevenir la creación de particiones gigantes. Las mediciones en disco confirmaron tamaños máximos altamente controlados: un límite de 379 KB (379 022 bytes) para particiones de (zona, día) y 6.8 KB (6 866 bytes) para (sensor, día), eliminando el riesgo de saturación de memoria (OutOfMemory) o degradación en las lecturas. Asimismo, la configuración de la estrategia de compactación TimeWindowCompactionStrategy (TWCS) con ventanas de 1 día garantizó que las SSTables se agruparan cronológicamente, optimizando el rendimiento de lectura para las series de tiempo más recientes.
+TABLA III: Ingesta de 1 000 000 de mediciones
+
+| Métrica | Valor |
+| :--- | :--- |
+| Filas cargadas (verificadas) | 1 000 000 |
+| Tiempo | 127.8 s |
+| Velocidad | 7 824 filas/s |
+| Lotes enviados | 95 866 |
+| Anomalías | 19 970 (2.00 %) |
+
+D. latencia
+TABLA IV: Mediana / p95 en ms, desde Python
+
+| Consulta | Filas | Corrida 2 (ms) | Corrida 3 (ms) |
+| :--- | :---: | :---: | :---: |
+| Última lectura de un sensor | 1 | 2.80 / 3.35 | 2.37 / 2.66 |
+| Últimas 10 lecturas | 10 | 3.08 / 3.92 | 2.58 / 3.37 |
+| Sensor y 1 día | 96 | 4.97 / 5.96 | 4.55 / 5.59 |
+| Sensor y 7 días | 664 | 19.07 / 28.01 | 13.24 / 16.64 |
+| Zona y 1 día | 4 579 | 47.04 / 93.25 | 38.38 / 67.62 |
+| Anomalías de un sensor | 2.2 (prom.) | 2.87 / 4.36 | 3.04 / 4.34 |
+| Anomalías de una zona | 90.6 (prom.) | 3.58 / 4.96 | 3.25 / 3.77 |
+| Resumen diario de una zona | 7 | 2.87 / 3.70 | 2.32 / 2.70 |
+
+E. Particionamiento y compactación.
+TABLA V: Tamaño de las particiones
+
+| Tabla | Particiones | Tamaño máx. | Celdas máx. |
+| :--- | :---: | :---: | :---: |
+| `lecturas_por_sensor` | 10 494 | 6 866 B | 642 |
+| `lecturas_por_zona` | 220 | 379 022 B | 24 601 |
+
+Ambas quedan muy por debajo de los 100 MB que el diseño toma como referencia. Con una versión previa del generador de 7 zonas, la partición zona-día llegó a 943 127 bytes y la consulta por zona y día a 201.5 ms de mediana (frente a 38 a 47 ms con 20 zonas), lo que muestra que el tamaño de la partición gobierna esa consulta. Se configuró TimeWindowCompactionStrategy con ventanas de un día, pero con 11 días de datos no se midió su efecto.
+
 
 ## VII. Limitaciones 
 
-El clúster de pruebas se implementó con un solo nodo y una estrategia de replicación SimpleStrategy cuyo factor de replicación es 1. Esta configuración es apropiada para un ambiente de desarrollo reproducible en una única máquina, sin embargo, no permite evidenciar experimentalmente las capacidades de replicación y tolerancia a fallos de nodo que proporciona Cassandra en un despliegue distribuido de producción con varios nodos (para lo cual se sugiere, como trabajo futuro, el uso de NetworkTopologyStrategy con un factor de replicación de 3).
+El clúster es un único nodo con SimpleStrategy y RF=1, por lo que no se demuestran la replicación ni la tolerancia a fallos, y los niveles de consistencia ajustable [3] no se diferencian entre sí (el estudio de referencia usa tres nodos y RF=3). En producción se usaría NetworkTopologyStrategy con RF=3. Cliente, servidor y cassandra-stress comparten la misma máquina. La velocidad de carga varió entre 3 477 y 7 938 filas/s, y las filas/s del estrés no son comparables con las del cargador, que escribe en varias tablas. Los datos son sintéticos y cubren 11 días, así que no se observó el crecimiento de las particiones tras meses.
 
-Igualmente, las pruebas de rendimiento se llevaron a cabo en una sola máquina de desarrollo, por lo que los resultados obtenidos representan el comportamiento del sistema bajo esas condiciones particulares de hardware, y podrían cambiar en un entorno de producción con recursos asignados.
+La consulta por zona y día es un punto débil, ya que devuelve 4.579 filas.En un clúster real, todas las escrituras de una zona en un día terminan en la misma partición, lo que puede generar un riesgo de hotspot.Esto se podría mitigar usando un bucket horario o añadiendo un shard adicional.
+
+El generador marca las anomalías, pero el sistema solo las almacena y consulta, sin detectarlas.
+Cassandra no es adecuada para realizar agregaciones o análisis ad hoc, y las consultas que recorren muchas particiones afectan el rendimiento [5].Por eso, el resumen diario se precalcula (en el prototipo, durante la carga).
+
 
 ## VIII. Conclusiones
 
-mediante este trabajo se llegó a las siguientes conclusiones y consideraciones que se deben tomar en cuenta:
+En primera instancia, la solución sobre Apache Cassandra cumplió los requisitos funcionales del caso. El diseño guiado por consultas, con particiones (sensor_id, bucket) y (zona, bucket), resolvió las consultas por sensor, zona y rango temporal con la clave de partición completa y sin ALLOW FILTERING. Las consultas de hasta 96 filas respondieron con mediana de 2.3 a 5.0 ms, y la de zona y día (4 579 filas) con 38 a 47 ms. El bucketing diario mantuvo las particiones pequeñas (máximo de 379 022 bytes por zona-día y 6 866 bytes por sensor-día), y la carga de 1 000 000 de mediciones tomó 127.8 s (7 824 filas/s). Pasaron las 12 pruebas funcionales y la prueba de estrés no produjo errores.
 
- Adecuación del Modelo de Columnas Ampliadas: La estructura NoSQL de columnas amplias de Apache Cassandra se reveló como la opción ideal para el sistema de supervisión AquaSense CR, cumpliendo con las necesidades de elevada ingesta de telemetría y búsqueda eficaz de series temporales, situación en la que los sistemas relacionales tradicionales enfrentan problemas de escalabilidad.
+Además, la consulta por área fue la debilidad, y el costo del diseño es la desnormalización: cada lectura se registra en diferentes tablas y no se evaluó su impacto en la escritura, tampoco se realizó comparación entre TimeWindowCompactionStrategy y otras estrategias.
 
-  Eficacia del Diseño Guiado por Consultas: La configuración de las tablas, totalmente basada en los patrones de acceso de la aplicación mediante la división por (sensor_id, bucket) y (zona, bucket) se eliminó la necesidad de realizar escaneos completos de tablas y el uso de ALLOW FILTERING, logrando tiempos de respuesta consistentes en la obtención de lecturas por sensor y zona.
+A modo de cierre, los hallazgos están restringidos a un nodo con RF=1, información sintética y anomalías señaladas por el generador (Sección VII). Se recomienda para trabajos futuros contemplar un clúster de tres nodos con RF=3, un histórico de meses, un bucket horario para la tabla por región, la identificación de anomalías en la ingesta y una API de consultas.
 
-  Efectividad de la Desnormalización y Tablas Especiales: Aceptar la carga de escritura de datos duplicados para mantener tablas especializadas como lecturas_por_zona, anomalias_por_sensor y ultima_lectura_sensor resultó ser una elección estratégica inteligente. Esta desnormalización facilitó la ejecución de búsquedas complejas y el filtrado de anomalías directamente, sin afectar el rendimiento de la base de datos.
 
-  Optimización del Almacenamiento con TWCS: La implementación de TimeWindowCompactionStrategy (TWCS) utilizando ventanas diarias se alineó perfectamente con la naturaleza de los datos de series temporales, minimizando la carga de compactación en disco en comparación con métodos tradicionales (como SizeTieredCompactionStrategy) y garantizando lecturas rápidas para datos recientes.
-
-  Agregación Precalculada en Contraste con Consultas Ad-Hoc: Considerando que Cassandra no está orientada a realizar operaciones analíticas o grandes agregaciones en tiempo real, la creación de la tabla resumen_diario_zona mostró cómo abordar informes operativos agregados a través de precálculo, evitando la disminución del rendimiento del clúster debido al recorrido entre múltiples particiones.
-
-Con un solo nodo y RF=1, los niveles de consistencia ajustable [3] no pueden ejercitarse: el estudio de referencia usa tres nodos con RF=3. Además, Cassandra no es adecuada para agregaciones y análisis ad hoc, y las consultas que recorren muchas particiones degradan el rendimiento [5]. Por eso el resumen diario se precalcula en resumen_diario_zona, y las consultas no previstas exigirían nuevas tablas.
-    
     
 ## IX. Referencias
 
