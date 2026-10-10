@@ -218,6 +218,4 @@ A modo de cierre, los hallazgos están restringidos a un nodo con RF=1, informac
 [5] J. Llanos Fariña, «Implementación de un sistema de almacenamiento de datos masivos para monitoreo estructural», Memoria de título, Dept. Ing. Informática, Univ. de Concepción, Concepción, Chile, 2018.
 
 ## X.Enlace a al repositorio
-
----
-> **Nota:** El documento final oficial con la diagramación de dos columnas del formato IEEE y gráficos detallados se encuentra en edición y será adjuntado en esta misma carpeta en formato PDF/Word.
+https://github.com/sandykrs/AquaSense-Cassandra-Grupo5
