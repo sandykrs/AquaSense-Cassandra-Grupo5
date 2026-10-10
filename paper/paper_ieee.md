@@ -4,11 +4,7 @@
 **Escuela de Estadística, Universidad de Costa Rica**  
 
 **Autores:**  
-Sandy
-Estefanía
-Keylor
-Jimena
-Jeferson
+Sandy Ruiz Salazar, Jeferson Salazar Zambrana, Estefanía Núñez Jimenéz, keylor Gómez Jiménez, Jimena Díaz González
 
 ---
 
