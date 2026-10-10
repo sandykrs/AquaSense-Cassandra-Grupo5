@@ -1,0 +1,14 @@
+test_anomalias_coinciden_con_lecturas (__main__.PruebasConsultas.test_anomalias_coinciden_con_lecturas) ... ok
+test_cantidad_de_sensores_y_zonas (__main__.PruebasConsultas.test_cantidad_de_sensores_y_zonas) ... ok
+test_lecturas_de_un_sensor_ordenadas_por_tiempo (__main__.PruebasConsultas.test_lecturas_de_un_sensor_ordenadas_por_tiempo) ... ok
+test_lecturas_por_zona_y_dia (__main__.PruebasConsultas.test_lecturas_por_zona_y_dia) ... ok
+test_no_se_permite_escaneo_sin_clave_de_particion (__main__.PruebasConsultas.test_no_se_permite_escaneo_sin_clave_de_particion) ... ok
+test_rango_de_siete_dias (__main__.PruebasConsultas.test_rango_de_siete_dias) ... ok
+test_resumen_diario_de_una_zona (__main__.PruebasConsultas.test_resumen_diario_de_una_zona) ... ok
+test_tablas_existen (__main__.PruebasConsultas.test_tablas_existen) ... ok
+test_ultima_lectura_es_la_mas_reciente (__main__.PruebasConsultas.test_ultima_lectura_es_la_mas_reciente) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.120s
+
+OK

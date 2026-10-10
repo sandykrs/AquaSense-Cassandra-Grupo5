@@ -1,0 +1,8 @@
+test_escrituras_concurrentes_no_pierden_filas (__main__.PruebasConcurrencia.test_escrituras_concurrentes_no_pierden_filas) ... ok
+test_lecturas_mientras_se_escribe (__main__.PruebasConcurrencia.test_lecturas_mientras_se_escribe) ... ok
+test_misma_clave_queda_una_sola_fila (__main__.PruebasConcurrencia.test_misma_clave_queda_una_sola_fila) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 27.106s
+
+OK
