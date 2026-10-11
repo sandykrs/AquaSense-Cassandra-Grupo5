@@ -71,10 +71,10 @@ docker exec -it aquasense cqlsh -f /schema.cql
 #### 4. Validar la carga de datos
 Para verificar ante los evaluadores que el millón de registros se cargó con éxito en Cassandra:
 ```powershell
-docker exec -it aquasense cqlsh -e "USE aquasense; SELECT COUNT(*) FROM lecturas_por_sensor;"
+pip install cassandra-driver
+python performance/verificar_carga.py
 ```
-*(Debe retornar exactamente un conteo de `1,000,000` registros).*
-
+*(Debe mostrar `Filas totales: 1,000,000`. Se usa este script porque `SELECT COUNT(*)` da timeout en Cassandra con este volumen.)*
 ---
 
 ### Consultas de Demostración y Pruebas
@@ -83,7 +83,7 @@ Para mostrar el funcionamiento del modelo de datos, puedes ejecutar directamente
 
 - **1. Conteo total de registros (demuestra la ingesta masiva):**
   ```powershell
-  docker exec -it aquasense cqlsh -e "USE aquasense; SELECT COUNT(*) FROM lecturas_por_sensor;"
+  python performance/verificar_carga.py
   ```
 
 - **2. Ver la estructura completa de tablas creadas en el keyspace:**
@@ -96,10 +96,12 @@ Para mostrar el funcionamiento del modelo de datos, puedes ejecutar directamente
   docker exec -it aquasense cqlsh -e "USE aquasense; SELECT * FROM lecturas_por_sensor LIMIT 5;"
   ```
 
-- **4. Consultar lecturas filtradas por un sensor específico (usando UUID y Allow Filtering):**
+- **4. Consultar lecturas de un sensor en un día (con clave de partición completa):**
   ```powershell
-  docker exec -it aquasense cqlsh -e "USE aquasense; SELECT * FROM lecturas_por_sensor WHERE sensor_id = 1224cbd2-b7c4-43ee-9b1f-c6d1388149dc LIMIT 5 ALLOW FILTERING;"
+  docker exec -it aquasense cqlsh -e "SELECT sensor_id, bucket FROM aquasense.lecturas_por_sensor LIMIT 1;"
+docker exec -it aquasense cqlsh -e "SELECT fecha_hora, caudal, presion, temperatura FROM aquasense.lecturas_por_sensor WHERE sensor_id = <SENSOR_ID> AND bucket = '<FECHA>' LIMIT 10;"
   ```
+Reemplazar <SENSOR_ID> y <FECHA> con los valores que devuelve el primer comando.
 
 - **5. Ver la última lectura registrada de cada sensor:**
   ```powershell
