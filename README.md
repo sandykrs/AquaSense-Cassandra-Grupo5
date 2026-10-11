@@ -99,9 +99,8 @@ Para mostrar el funcionamiento del modelo de datos, puedes ejecutar directamente
 - **4. Consultar lecturas de un sensor en un día (con clave de partición completa):**
   ```powershell
   docker exec -it aquasense cqlsh -e "SELECT sensor_id, bucket FROM aquasense.lecturas_por_sensor LIMIT 1;"
-  docker exec -it aquasense cqlsh -e "SELECT fecha_hora, caudal, presion, temperatura FROM aquasense.lecturas_por_sensor WHERE sensor_id = <SENSOR_ID> AND bucket = '<FECHA>' LIMIT 10;"
+  docker exec -it aquasense cqlsh -e "SELECT fecha_hora, caudal, presion, temperatura FROM aquasense.lecturas_por_sensor WHERE sensor_id = 1224cbd2-b7c4-43ee-9b1f-c6d1388149dc AND bucket = '2026-01-01' LIMIT 10;"
   ```
-  Reemplazar `<SENSOR_ID>` y `<FECHA>` con los valores que devuelve el primer comando.
 
 - **5. Ver la última lectura registrada de cada sensor:**
   ```powershell
