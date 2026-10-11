@@ -74,9 +74,6 @@ Para verificar ante los evaluadores que el millón de registros se cargó con é
 pip install cassandra-driver
 python performance/verificar_carga.py
 ```
-*(Debe mostrar `Filas totales: 1,000,000`. Se usa este script porque `SELECT COUNT(*)` da timeout en Cassandra con este volumen.)*
----
-
 ### Consultas de Demostración y Pruebas
 
 Para mostrar el funcionamiento del modelo de datos, puedes ejecutar directamente las siguientes consultas en la terminal:
