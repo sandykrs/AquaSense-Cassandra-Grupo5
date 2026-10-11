@@ -16,7 +16,7 @@
 ## Descripción del Proyecto
 AquaSense CR es un sistema diseñado para monitorear redes de agua potable mediante sensores de caudal, presión, temperatura y calidad. Este repositorio contiene la implementación de una capa de datos de alta velocidad en **Apache Cassandra** capaz de soportar la ingesta continua de datos de telemetría y consultar eficientemente series de tiempo por sensor y por intervalo.
 
-## Guía de Ejecución Rápida para Evaluación (Sin instalaciones locales)
+## Guía de Ejecución Rápida 
 
 ### Prerrequisitos
 1. Tener **Docker Desktop** instalado y abierto en segundo plano (verifica que el ícono esté en verde).
