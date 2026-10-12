@@ -16,7 +16,7 @@
 ## Descripción del Proyecto
 AquaSense CR es un sistema diseñado para monitorear redes de agua potable mediante sensores de caudal, presión, temperatura y calidad. Este repositorio contiene la implementación de una capa de datos de alta velocidad en **Apache Cassandra** capaz de soportar la ingesta continua de datos de telemetría y consultar eficientemente series de tiempo por sensor y por intervalo.
 
-## Guía de Ejecución Rápida para Evaluación (Sin instalaciones locales)
+## Guía de Ejecución Rápida 
 
 ### Prerrequisitos
 1. Tener **Docker Desktop** instalado y abierto en segundo plano (verifica que el ícono esté en verde).
@@ -43,19 +43,32 @@ Tienes dos formas sencillas de preparar el entorno para la evaluación:
 
 ### Pasos para el despliegue 
 #### 1. Levantar el clúster de Cassandra
-Ejecuta el siguiente comando para iniciar el contenedor de la base de datos:
-```powershell
+Si quieres empezar desde cero (esto **borra los datos** que tengas cargados), ejecuta primero:
+  ```powershell
+docker compose down -v
+  ```
+Inicia el contenedor de la base de datos:
+  ```powershell
 docker compose up -d
-```
-*(Confirma en la interfaz gráfica de Docker Desktop que el contenedor llamado `aquasense` aparezca activo).*
+  ```
+Verifica que el contenedor `aquasense` esté en ejecución. Cassandra tarda de 1 a 3 minutos en arrancar, así que repite este comando hasta que el estado diga `(healthy)`:
+  ```powershell
+docker ps
+  ```
+*(Mientras arranca se ve `(health: starting)`. Cuando termina se ve `Up ... (healthy)`).*
+
+Confirma que el nodo está en buen estado:
+  ```powershell
+docker exec aquasense nodetool status
+  ```
+*(Al inicio de la línea del nodo debe aparecer `UN`, que significa Up/Normal. Si aparece `DN` o el comando da error de conexión, Cassandra aún está arrancando: espera un minuto y repite).*
 
 #### 2. Cargar el esquema de la base de datos
-Copia y ejecuta estos dos comandos para copiar y crear el *keyspace* y las tablas automáticamente:
-```powershell
-docker cp database/schema/schema.cql aquasense:/schema.cql
+El esquema ya queda montado dentro del contenedor, así que no hace falta copiarlo. Este comando crea el *keyspace* y las 8 tablas:
+  ```powershell
 docker exec -it aquasense cqlsh -f /schema.cql
-```
-
+  ```
+*(Deben listarse las 8 tablas).*
 #### 3. Ingerir el volumen de datos (1,000,000 de registros)
 *Este comando levanta un contenedor temporal de Python aislado en Docker, instala el conector oficial y procesa los datos de forma automática:*
 
