@@ -26,7 +26,7 @@ Se debe considerar un ajuste cuando:
 
 1. **Identificar el problema:** latencia alta, error de query, hotspot.
 2. **Diseñar la tabla corregida** con las nuevas partition/clustering keys.
-3. **Crear la tabla nueva** con otro nombre (por ejemplo, `sensor_readings_v2`).
+3. **Crear la tabla nueva** con otro nombre (por ejemplo, `lecturas_por_sensor_v2`).
 4. **Migrar datos** con un script (Spark o Python con driver cassandra-driver).
 5. **Actualizar la aplicación** para escribir y leer de la tabla nueva.
 6. **Eliminar la tabla antigua** solo cuando ya no se use.
@@ -61,23 +61,46 @@ Se debe considerar un ajuste cuando:
 
 ## 4. Ejemplo: cambiar bucket diario a horario
 
-Si un sensor genera muchas más lecturas de las previstas, se puede reducir el bucket:
+Si un sensor genera muchas más lecturas de las previstas, se puede reducir el bucket. El mismo cambio aplica a `lecturas_por_zona`, que es la tabla con las particiones más grandes del diseño (hasta 379 022 bytes medidos con 20 zonas).
 
 ```cql
--- Tabla original
-CREATE TABLE sensor_readings (
+-- Tabla vigente (database/schema/schema.cql)
+CREATE TABLE lecturas_por_sensor (
   sensor_id uuid,
   bucket date,
-  ts timestamp,
-  ...
-  PRIMARY KEY ((sensor_id, bucket), ts)
-);
+  fecha_hora timestamp,
+  zona text,
+  caudal double,
+  presion double,
+  temperatura double,
+  calidad text,
+  anomalia boolean,
+  PRIMARY KEY ((sensor_id, bucket), fecha_hora)
+) WITH CLUSTERING ORDER BY (fecha_hora DESC)
+  AND compaction = {
+    'class': 'TimeWindowCompactionStrategy',
+    'compaction_window_unit': 'DAYS',
+    'compaction_window_size': 1
+  };
 
--- Tabla ajustada
-CREATE TABLE sensor_readings_v2 (
+-- Tabla ajustada (bucket horario)
+CREATE TABLE lecturas_por_sensor_v2 (
   sensor_id uuid,
-  bucket_hour text,  -- formato 'YYYY-MM-DD-HH'
-  ts timestamp,
-  ...
-  PRIMARY KEY ((sensor_id, bucket_hour), ts)
-);
+  bucket_hora text,  -- formato 'YYYY-MM-DD-HH'
+  fecha_hora timestamp,
+  zona text,
+  caudal double,
+  presion double,
+  temperatura double,
+  calidad text,
+  anomalia boolean,
+  PRIMARY KEY ((sensor_id, bucket_hora), fecha_hora)
+) WITH CLUSTERING ORDER BY (fecha_hora DESC)
+  AND compaction = {
+    'class': 'TimeWindowCompactionStrategy',
+    'compaction_window_unit': 'HOURS',
+    'compaction_window_size': 1
+  };
+```
+
+Con un bucket horario, un rango de varios días requiere consultar más particiones (una por hora), por lo que la aplicación debe iterar o usar `IN` sobre los buckets.
