@@ -27,6 +27,8 @@ Validar que las 8 tablas del keyspace `aquasense` (con nomenclatura en español)
 | Keyspace | `aquasense` |
 | Cliente | cqlsh |
 
+**Nota sobre este registro:** la validación se hizo el 2 de octubre con `docker run` y la imagen `cassandra:latest` (que entonces resolvía a la versión 5.0.9). El entorno vigente del proyecto es `docker-compose.yml`, con la imagen `cassandra:5.0.9`, el contenedor `aquasense` y el clúster `AquaSenseCluster`. Los identificadores `Z01` y el motivo `flow_high` de los ejemplos son valores de prueba de esta validación; los datos reales usan zonas como `sanjose` o `cartago` y motivos como `fuga` o `presion_baja`.
+
 ---
 
 ## 3. Comandos de validación
