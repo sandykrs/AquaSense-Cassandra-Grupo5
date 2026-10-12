@@ -4,11 +4,7 @@
 **Escuela de Estadística, Universidad de Costa Rica**  
 
 **Autores:**  
-Sandy
-Estefanía
-Keylor
-Jimena
-Jeferson
+Sandy Ruiz Salazar, Jeferson Salazar Zambrana, Estefanía Núñez Jimenéz, keylor Gómez Jiménez, Jimena Díaz González
 
 ---
 
@@ -46,8 +42,7 @@ Finalmente, la escalabilidad horizontal es una característica esencial de este 
 ## III. Tecnología Seleccionada
 
 ### A. Apache Cassandra 5.0.9
-Para la implementación de la solución, se optó por Apache Cassandra, una base de datos de código abierto NoSQL que claramente se enmarca en el modelo de columnas anchas, diseñada para manejar grandes volúmenes de datos a través de múltiples nodos. Su arquitectura de tipo peer-to-peer, sin un nodo maestro, elimina los puntos únicos de fallo y permite que cualquier nodo dentro del clúster gestione solicitudes tanto de lectura como de escritura, lo que la hace ideal para un sistema de monitoreo que necesita funcionar de manera continua [2].
-
+Lo primero, para la implementación de la solución, se optó por Apache Cassandra, una base de datos de código abierto NoSQL que claramente se enmarca en el modelo de columnas anchas, diseñada para manejar grandes volúmenes de datos a través de múltiples nodos. Su arquitectura de tipo peer-to-peer, sin un nodo maestro, elimina los puntos únicos de fallo y permite que cualquier nodo dentro del clúster gestione solicitudes tanto de lectura como de escritura, lo que la hace ideal para un sistema de monitoreo que necesita funcionar de manera continua [2].
 Originalmente desarrollada en Facebook y liberada como proyecto open source en 2008, hoy es mantenida por la Apache Software Foundation.
 
 Sus características principales son:
@@ -223,6 +218,4 @@ A modo de cierre, los hallazgos están restringidos a un nodo con RF=1, informac
 [5] J. Llanos Fariña, «Implementación de un sistema de almacenamiento de datos masivos para monitoreo estructural», Memoria de título, Dept. Ing. Informática, Univ. de Concepción, Concepción, Chile, 2018.
 
 ## X.Enlace a al repositorio
-
----
-> **Nota:** El documento final oficial con la diagramación de dos columnas del formato IEEE y gráficos detallados se encuentra en edición y será adjuntado en esta misma carpeta en formato PDF/Word.
+https://github.com/sandykrs/AquaSense-Cassandra-Grupo5
