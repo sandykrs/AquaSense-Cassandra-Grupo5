@@ -85,7 +85,6 @@ docker exec -it aquasense cqlsh -f /schema.cql
 Para verificar ante los evaluadores que el millón de registros se cargó con éxito en Cassandra:
 ```powershell
 pip install cassandra-driver
-python performance/verificar_carga.py
 ```
 ### Consultas de Demostración y Pruebas
 
