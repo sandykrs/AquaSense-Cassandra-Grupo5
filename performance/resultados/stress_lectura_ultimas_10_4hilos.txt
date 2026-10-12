@@ -1,0 +1,187 @@
+﻿******************** Stress Settings ********************
+Command:
+  Type: user
+  Count: 50,000
+  No Warmup: true
+  Consistency Level: LOCAL_ONE
+  Target Uncertainty: not applicable
+  Command Ratios: {ultimas_10=1.0}
+  Command Clustering Distribution: clustering=gaussian(1..10)
+  Profile File(s): /tmp/stress_test.yaml
+Rate:
+  Auto: false
+  Thread Count: 4
+  OpsPer Sec: 0
+Population:
+  Distribution: Gaussian:  min=1,max=50000,mean=25000.500000,stdev=8333.166667
+  Order: ARBITRARY
+  Wrap: false
+Insert:
+  Revisits: Uniform:  min=1,max=1000000
+  Visits: Fixed:  key=1
+  Row Population Ratio: Ratio: divisor=1.000000;delegate=Fixed:  key=1
+  Batch Type: not batching
+Errors:
+  Ignore: false
+  Tries: 10
+Log:
+  No Summary: false
+  No Settings: false
+  File: null
+  Interval Millis: 1000
+  Level: NORMAL
+Mode:
+  API: JAVA_DRIVER_NATIVE
+  Connection Style: CQL_PREPARED
+  Protocol Version: V5
+  Username: null
+  Password: null
+  Auth Provide Class: null
+  Max Pending Per Connection: 128
+  Connections Per Host: 8
+  Compression: NONE
+Node:
+  Nodes: [localhost]
+  Is White List: false
+  Datacenter: null
+Schema:
+  Keyspace: null
+  Replication Strategy: org.apache.cassandra.locator.SimpleStrategy
+  Replication Strategy Options: {replication_factor=1}
+  Table Compression: null
+  Table Compaction Strategy: null
+  Table Compaction Strategy Options: {}
+Transport:
+  Truststore: null
+  Truststore Password: null
+  Keystore: null
+  Keystore Password: null
+  SSL Protocol: TLS
+  SSL Algorithm: null
+  SSL Ciphers: null
+Port:
+  Native Port: 9042
+  JMX Port: 7199
+JMX:
+  Username: null
+  Password: *not set*
+Graph:
+  File: null
+  Revision: unknown
+  Title: null
+  Operation: USER
+TokenRange:
+  Wrap: false
+  Split Factor: 1
+Credentials file:
+  File: *not set*
+  CQL username: *not set*
+  CQL password: *not set*
+  JMX username: *not set*
+  JMX password: *not set*
+  Transport truststore password: *not set*
+  Transport keystore password: *not set*
+Reporting:
+  Output frequency: 1s
+  Header frequency: *not set*
+
+******************** Profile(s) ********************
+  Keyspace Name: aquasense_stress
+  Keyspace CQL: 
+***
+CREATE KEYSPACE aquasense_stress
+WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
+***
+
+  Table Name: lecturas_por_sensor
+  Table CQL: 
+***
+CREATE TABLE lecturas_por_sensor (
+  sensor_id uuid,
+  bucket int,
+  fecha_hora timestamp,
+  zona text,
+  caudal double,
+  presion double,
+  temperatura double,
+  calidad text,
+  anomalia boolean,
+  PRIMARY KEY ((sensor_id, bucket), fecha_hora)
+) WITH CLUSTERING ORDER BY (fecha_hora DESC)
+  AND compaction = {
+    'class': 'TimeWindowCompactionStrategy',
+    'compaction_window_unit': 'DAYS',
+    'compaction_window_size': 1
+  };
+***
+
+  Extra Schema Definitions: null
+  Generator Configs:
+    sensor_id: Identity: Uniform:  min=1,max=1000;
+    bucket: Identity: Uniform:  min=1,max=30;
+    zona: Size: Fixed:  key=3;Identity: Uniform:  min=1,max=20;
+    fecha_hora: Clustering: Fixed:  key=33;
+    calidad: Size: Fixed:  key=5;Identity: Uniform:  min=1,max=3;
+  Query Definitions:
+    por_sensor_dia: CQL:SELECT * FROM lecturas_por_sensor WHERE sensor_id = ? AND bucket = ?;Fields:samerow;
+    ultimas_10: CQL:SELECT * FROM lecturas_por_sensor WHERE sensor_id = ? AND bucket = ? LIMIT 10;Fields:samerow;
+  Token Range Queries:
+  Insert Settings:
+    partitions: fixed(1)
+    batchtype: UNLOGGED
+Connected to cluster: Test Cluster, max pending requests per connection 128, max connections per host 8
+Datacenter: datacenter1; Host: localhost/127.0.0.1:9042; Rack: rack1
+Created schema. Sleeping 1s for propagation.
+Insert Statement:
+  UPDATE lecturas_por_sensor SET anomalia = ?,calidad = ?,caudal = ?,presion = ?,temperatura = ?,zona = ? WHERE sensor_id = ? AND bucket = ? AND fecha_hora = ?
+Generating batches with [1..1] partitions and [33..33] rows (of [33..33] total rows in the partitions)
+
+Sleeping 2s...
+Running [ultimas_10] with 4 threads for 50000 iteration
+type                                               total ops,    op/s,    pk/s,   row/s,    mean,     med,     .95,     .99,    .999,     max,   time,   stderr, errors,  gc: #,  max ms,  sum ms,  sdv ms,      mb
+total,                                                    64,      64,      64,     640,     3.6,     3.2,     7.7,     9.7,     9.7,     9.7,    1.0,  0.00000,      0,      0,       0,       0,       0,       0
+total,                                                  1553,    1489,    1489,   14890,     2.6,     2.3,     4.3,     5.8,    14.3,    15.7,    2.0,  0.64917,      0,      0,       0,       0,       0,       0
+total,                                                  3664,    2111,    2111,   21110,     1.8,     1.6,     3.4,     5.2,     7.6,     8.7,    3.0,  0.40439,      0,      0,       0,       0,       0,       0
+total,                                                  6164,    2500,    2500,   25000,     1.6,     1.3,     2.8,     4.5,     7.8,     8.2,    4.0,  0.29979,      0,      0,       0,       0,       0,       0
+total,                                                  8304,    2140,    2140,   21400,     1.8,     1.5,     3.5,     6.3,    11.0,    16.9,    5.0,  0.23173,      0,      0,       0,       0,       0,       0
+total,                                                  9466,    1162,    1162,   11620,     3.4,     2.1,    10.2,    15.9,    26.1,    26.5,    6.0,  0.20814,      0,      1,       9,       9,       0,    1120
+total,                                                 10955,    1489,    1489,   14890,     2.6,     1.8,     7.4,    13.0,    20.9,    21.1,    7.0,  0.17978,      0,      0,       0,       0,       0,       0
+total,                                                 12292,    1337,    1337,   13370,     2.9,     1.8,     8.8,    14.5,    21.0,    28.6,    8.0,  0.16076,      0,      0,       0,       0,       0,       0
+total,                                                 13586,    1294,    1294,   12940,     3.0,     2.1,     8.0,    13.4,    19.3,    20.7,    9.0,  0.14631,      0,      0,       0,       0,       0,       0
+total,                                                 15072,    1486,    1486,   14860,     2.6,     1.9,     7.2,    14.0,    20.1,    22.0,   10.0,  0.13182,      0,      0,       0,       0,       0,       0
+total,                                                 16936,    1864,    1864,   18640,     2.1,     1.7,     4.1,     8.4,    15.3,    16.2,   11.0,  0.11902,      0,      0,       0,       0,       0,       0
+total,                                                 19092,    2156,    2156,   21560,     1.8,     1.5,     3.5,     7.0,    13.6,    21.6,   12.0,  0.11009,      0,      0,       0,       0,       0,       0
+total,                                                 21384,    2292,    2292,   22920,     1.7,     1.4,     3.5,     7.6,    15.7,    20.3,   13.0,  0.10327,      0,      0,       0,       0,       0,       0
+total,                                                 23348,    1964,    1964,   19640,     2.0,     1.5,     4.1,    13.1,    24.4,    41.1,   14.0,  0.09559,      0,      0,       0,       0,       0,       0
+total,                                                 25306,    1958,    1958,   19580,     2.0,     1.7,     3.6,     8.5,    13.0,    13.3,   15.0,  0.08887,      0,      0,       0,       0,       0,       0
+total,                                                 27198,    1892,    1892,   18920,     2.1,     1.5,     4.9,    12.8,    37.8,    41.2,   16.0,  0.08303,      0,      0,       0,       0,       0,       0
+total,                                                 29427,    2229,    2229,   22290,     1.8,     1.5,     3.6,     6.5,     9.6,    10.4,   17.0,  0.07859,      0,      0,       0,       0,       0,       0
+total,                                                 32114,    2687,    2687,   26870,     1.5,     1.3,     2.5,     5.4,     7.9,     9.2,   18.0,  0.07735,      0,      0,       0,       0,       0,       0
+total,                                                 34879,    2765,    2765,   27650,     1.4,     1.3,     2.2,     3.7,     6.7,     7.5,   19.0,  0.07604,      0,      0,       0,       0,       0,       0
+total,                                                 37950,    3071,    3071,   30710,     1.3,     1.2,     1.8,     2.7,     8.3,     9.6,   20.0,  0.07652,      0,      1,       7,       7,       0,    1120
+total,                                                 41242,    3292,    3292,   32920,     1.2,     1.1,     1.6,     2.1,     4.4,     5.0,   21.0,  0.07743,      0,      0,       0,       0,       0,       0
+total,                                                 44511,    3269,    3269,   32690,     1.2,     1.1,     1.7,     2.2,     4.2,     4.7,   22.0,  0.07700,      0,      0,       0,       0,       0,       0
+total,                                                 47459,    2948,    2948,   29480,     1.3,     1.2,     2.4,     4.6,     9.3,     9.7,   23.0,  0.07463,      0,      0,       0,       0,       0,       0
+total,                                                 50000,    3523,    3523,   35230,     1.1,     1.1,     1.5,     1.9,     4.3,     5.6,   23.7,  0.07476,      0,      0,       0,       0,       0,       0
+
+
+Results:
+Op rate                   :    2,108 op/s  [ultimas_10: 2,108 op/s]
+Partition rate            :    2,108 pk/s  [ultimas_10: 2,108 pk/s]
+Row rate                  :   21,078 row/s [ultimas_10: 21,078 row/s]
+Latency mean              :    1.8 ms [ultimas_10: 1.8 ms]
+Latency median            :    1.4 ms [ultimas_10: 1.4 ms]
+Latency 95th percentile   :    3.7 ms [ultimas_10: 3.7 ms]
+Latency 99th percentile   :    8.6 ms [ultimas_10: 8.6 ms]
+Latency 99.9th percentile :   17.1 ms [ultimas_10: 17.1 ms]
+Latency max               :   41.2 ms [ultimas_10: 41.2 ms]
+Total partitions          :     50,000 [ultimas_10: 50,000]
+Total errors              :          0 [ultimas_10: 0]
+Total GC count            : 2
+Total GC memory           : 2.187 GiB
+Total GC time             :    0.0 seconds
+Avg GC time               :    8.0 ms
+StdDev GC time            :    1.0 ms
+Total operation time      : 00:00:23
+
+END

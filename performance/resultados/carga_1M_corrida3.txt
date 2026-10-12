@@ -1,0 +1,57 @@
+﻿Sensores cargados: 1000
+  20,000 filas | 7,833 filas/s
+  40,000 filas | 7,683 filas/s
+  60,000 filas | 7,704 filas/s
+  80,000 filas | 7,656 filas/s
+  100,000 filas | 7,759 filas/s
+  120,000 filas | 7,626 filas/s
+  140,000 filas | 7,506 filas/s
+  160,000 filas | 7,498 filas/s
+  180,000 filas | 7,306 filas/s
+  200,000 filas | 7,246 filas/s
+  220,000 filas | 7,290 filas/s
+  240,000 filas | 7,191 filas/s
+  260,000 filas | 7,244 filas/s
+  280,000 filas | 7,185 filas/s
+  300,000 filas | 7,212 filas/s
+  320,000 filas | 7,276 filas/s
+  340,000 filas | 7,289 filas/s
+  360,000 filas | 7,331 filas/s
+  380,000 filas | 7,302 filas/s
+  400,000 filas | 7,332 filas/s
+  420,000 filas | 7,271 filas/s
+  440,000 filas | 7,185 filas/s
+  460,000 filas | 7,175 filas/s
+  480,000 filas | 6,987 filas/s
+  500,000 filas | 6,928 filas/s
+  520,000 filas | 6,955 filas/s
+  540,000 filas | 6,921 filas/s
+  560,000 filas | 6,935 filas/s
+  580,000 filas | 6,934 filas/s
+  600,000 filas | 6,991 filas/s
+  620,000 filas | 7,022 filas/s
+  640,000 filas | 7,001 filas/s
+  660,000 filas | 7,015 filas/s
+  680,000 filas | 7,001 filas/s
+  700,000 filas | 7,013 filas/s
+  720,000 filas | 6,939 filas/s
+  740,000 filas | 6,901 filas/s
+  760,000 filas | 6,927 filas/s
+  780,000 filas | 6,822 filas/s
+  800,000 filas | 6,807 filas/s
+  820,000 filas | 6,833 filas/s
+  840,000 filas | 6,803 filas/s
+  860,000 filas | 6,820 filas/s
+  880,000 filas | 6,819 filas/s
+  900,000 filas | 6,832 filas/s
+  920,000 filas | 6,858 filas/s
+  940,000 filas | 6,873 filas/s
+  960,000 filas | 6,897 filas/s
+  980,000 filas | 6,872 filas/s
+  1,000,000 filas | 6,887 filas/s
+--------------------------------------------------
+Mediciones cargadas: 1,000,000
+AnomalÝas cargadas:  15,176
+Batches enviados:    104,909
+Tiempo:              145.7 s
+Velocidad:           6,862 filas/s

@@ -1,0 +1,3 @@
+﻿Tiempo hasta aceptar consultas: 67,0 s
+Tiempo hasta aceptar consultas: 31,9 s
+Tiempo hasta aceptar consultas: 24,3 s

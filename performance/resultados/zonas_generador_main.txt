@@ -1,0 +1,16 @@
+﻿
+ zona       | count
+------------+-------
+    cartago |   143
+   alajuela |   143
+ puntarenas |   143
+      limon |   142
+    sanjose |   143
+    heredia |   143
+ guanacaste |   143
+
+(7 rows)
+
+Warnings :
+Aggregation query used without partition key
+
